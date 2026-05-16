@@ -24,7 +24,7 @@ spec:
       serviceAccountName: infra-shared
       containers:
         - name: fzt-frontend
-          image: romainecr.azurecr.io/fzt-frontend:placeholder
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
