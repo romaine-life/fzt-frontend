@@ -60,22 +60,19 @@ state attached so callers can merge and retry.
 
 ## Auth model
 
-HS256 JWT signed with `api-jwt-signing-secret` from the app-owned
-`ng6-fzt-frontend` Key Vault. This
-backend **only verifies** — it never issues tokens. Issuers:
+This backend **only verifies** — it never issues tokens. Browser callers use
+RS256 JWTs issued by `auth.romaine.life` and verified against
+`https://auth.romaine.life/api/auth/jwks` with issuer
+`https://auth.romaine.life`. The legacy HS256 `api-jwt-signing-secret` path
+from the app-owned `ng6-fzt-frontend` Key Vault remains for existing
+terminal/CLI callers during migration.
 
-- `my-homepage` browser tab: receives the JWT in the `#token=` URL
-  fragment that `romaine-api.py login` opens.
-- `romaine-api.py` CLI: mints its own per-call JWT from the KV secret
-  for the loaded identity (`nelson`, `nelson-ea`, `nelson-r1`).
-- Anyone else who has the KV secret: same pattern.
-
-Bearer header preferred; cookie `auth_token=` accepted as fallback.
-Identity claims (`sub`, `email`, `name`, `role`) are baked into the
-token payload — there is **no per-tree ACL**. Any authenticated caller
-can read or write any tree id. Identity-based scoping is enforced
-client-side by choosing which tree ids to fetch and save (e.g.
-`nelson-bookmarks` vs `nelson-ea-bookmarks`).
+Bearer header preferred; legacy cookie `auth_token=` accepted as fallback.
+Identity claims (`sub`, `email`, `name`, `role`) are baked into the token
+payload — there is **no per-tree ACL**. Any authenticated caller can read or
+write any tree id. Identity-based scoping is enforced client-side by choosing
+which tree ids to fetch and save (e.g. `nelson-bookmarks` vs
+`nelson-ea-bookmarks`).
 
 Adding an identity: edit `claims.go` in this repo *and* the
 `IDENTITIES` dict in `romaine-api.py` — the duplication is intentional

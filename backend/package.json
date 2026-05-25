@@ -19,6 +19,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "helmet": "^8.1.0",
+    "jose": "^5.10.0",
     "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.0"
   },

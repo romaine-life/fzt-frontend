@@ -1,10 +1,17 @@
 import jwt from 'jsonwebtoken';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 
-// fzt-frontend only verifies JWTs — callers (my-homepage web, fzt-automate
-// CLI) sign their own with the app-vault `api-jwt-signing-secret`. No token
-// issuance endpoints live on this backend.
+const AUTH_ISSUER = process.env.AUTH_ISSUER || 'https://auth.romaine.life';
+const AUTH_JWKS_URL = process.env.AUTH_JWKS_URL || `${AUTH_ISSUER}/api/auth/jwks`;
+const AUTH_ROLES = new Set(['admin', 'user', 'service']);
+
+// fzt-frontend only verifies JWTs. Browser callers use auth.romaine.life
+// RS256 tokens; the legacy HS256 app-vault secret path remains for existing
+// terminal/CLI callers during migration.
 export function createRequireAuth({ jwtSecret }) {
-  return (req, res, next) => {
+  const authJwks = createRemoteJWKSet(new URL(AUTH_JWKS_URL));
+
+  return async (req, res, next) => {
     let token;
     const authHeader = req.headers.authorization;
     if (authHeader?.startsWith('Bearer ')) {
@@ -27,7 +34,27 @@ export function createRequireAuth({ jwtSecret }) {
         name: payload.name,
         role: payload.role || 'member',
       };
-      next();
+      return next();
+    } catch {
+      // Fall through to auth.romaine.life verification below.
+    }
+
+    try {
+      const { payload } = await jwtVerify(token, authJwks, {
+        issuer: AUTH_ISSUER,
+      });
+      const role = typeof payload.role === 'string' ? payload.role : 'user';
+      if (!AUTH_ROLES.has(role)) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+      req.user = {
+        sub: payload.sub,
+        email: payload.email,
+        name: payload.name,
+        role,
+        apps: payload.apps || {},
+      };
+      return next();
     } catch {
       return res.status(401).json({ error: 'Invalid or expired token' });
     }
