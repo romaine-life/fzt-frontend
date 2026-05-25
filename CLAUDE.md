@@ -60,7 +60,8 @@ state attached so callers can merge and retry.
 
 ## Auth model
 
-HS256 JWT signed with `api-jwt-signing-secret` from `romaine-kv`. This
+HS256 JWT signed with `api-jwt-signing-secret` from the app-owned
+`ng6-fzt-frontend` Key Vault. This
 backend **only verifies** — it never issues tokens. Issuers:
 
 - `my-homepage` browser tab: receives the JWT in the `#token=` URL
@@ -143,7 +144,7 @@ cd backend
 npm install
 PORT=3000 node server.js
 # server reads cosmosDbEndpoint + jwtSigningSecret via DefaultAzureCredential —
-# `az login` against a principal with read access on romaine-kv first.
+# `az login` against a principal with read access on ng6-fzt-frontend first.
 ```
 
 Frontend dev (Go-WASM fzt terminal): see `fzt-terminal/CLAUDE.md` for
