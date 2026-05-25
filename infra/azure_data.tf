@@ -1,6 +1,10 @@
-# Shared Azure data sources. Underlying resources (RG, KV, AKS, Cosmos
+# Shared Azure data sources. Underlying resources (RG, shared KV, AKS, Cosmos
 # account, App Configuration store) live in other repos' state — this
 # stack only reads them.
+
+locals {
+  shared_key_vault_name = "romaine-kv"
+}
 
 data "azurerm_client_config" "current" {}
 
@@ -8,8 +12,8 @@ data "azurerm_resource_group" "main" {
   name = var.resource_group_name
 }
 
-data "azurerm_key_vault" "main" {
-  name                = var.key_vault_name
+data "azurerm_key_vault" "shared" {
+  name                = local.shared_key_vault_name
   resource_group_name = var.resource_group_name
 }
 
