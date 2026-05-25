@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 
 // fzt-frontend only verifies JWTs — callers (my-homepage web, fzt-automate
-// CLI) sign their own with the shared `api-jwt-signing-secret`. No token
+// CLI) sign their own with the app-vault `api-jwt-signing-secret`. No token
 // issuance endpoints live on this backend.
 export function createRequireAuth({ jwtSecret }) {
   return (req, res, next) => {
