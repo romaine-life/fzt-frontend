@@ -14,13 +14,11 @@
     "@azure/app-configuration": "^1.11.0",
     "@azure/cosmos": "^4.0.0",
     "@azure/identity": "^4.0.0",
-    "@azure/keyvault-secrets": "^4.11.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "helmet": "^8.1.0",
     "jose": "^5.10.0",
-    "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.0"
   },
   "engines": {

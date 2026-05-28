@@ -1,14 +1,14 @@
-import jwt from 'jsonwebtoken';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 const AUTH_ISSUER = process.env.AUTH_ISSUER || 'https://auth.romaine.life';
 const AUTH_JWKS_URL = process.env.AUTH_JWKS_URL || `${AUTH_ISSUER}/api/auth/jwks`;
 const AUTH_ROLES = new Set(['admin', 'user', 'service']);
 
-// fzt-frontend only verifies JWTs. Browser callers use auth.romaine.life
-// RS256 tokens; the legacy HS256 app-vault secret path remains for existing
-// terminal/CLI callers during migration.
-export function createRequireAuth({ jwtSecret }) {
+// fzt-frontend only verifies JWTs — it never issues them. All callers
+// present auth.romaine.life RS256 tokens, verified against the issuer's
+// JWKS. The legacy HS256 api-jwt-signing-secret path was removed in the
+// auth.romaine.life migration — no compatibility fallback.
+export function createRequireAuth() {
   const authJwks = createRemoteJWKSet(new URL(AUTH_JWKS_URL));
 
   return async (req, res, next) => {
@@ -24,19 +24,6 @@ export function createRequireAuth({ jwtSecret }) {
 
     if (!token) {
       return res.status(401).json({ error: 'Missing authentication' });
-    }
-
-    try {
-      const payload = jwt.verify(token, jwtSecret);
-      req.user = {
-        sub: payload.sub,
-        email: payload.email,
-        name: payload.name,
-        role: payload.role || 'member',
-      };
-      return next();
-    } catch {
-      // Fall through to auth.romaine.life verification below.
     }
 
     try {

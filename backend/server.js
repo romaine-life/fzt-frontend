@@ -1,7 +1,7 @@
 // Backend for fzt-frontend.romaine.life. Hosts the unified tree API
 // (/fzt/tree/:id) consumed by my-homepage web and fzt-automate CLI.
-// This API only verifies JWTs — it never issues them. Callers sign their
-// own JWTs with `api-jwt-signing-secret` from the app Key Vault.
+// This API only verifies JWTs — it never issues them. All callers present
+// auth.romaine.life RS256 tokens, verified against the issuer's JWKS.
 import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
@@ -45,7 +45,7 @@ async function start() {
   // keyed by its id).
   const container = cosmosClient.database('HomepageDB').container('fzt-frontend-data');
 
-  const requireAuth = createRequireAuth({ jwtSecret: config.jwtSigningSecret });
+  const requireAuth = createRequireAuth();
 
   app.use('/fzt', createFztFrontendRoutes({ requireAuth, container }));
 
