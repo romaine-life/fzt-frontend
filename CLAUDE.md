@@ -60,23 +60,20 @@ state attached so callers can merge and retry.
 
 ## Auth model
 
-This backend **only verifies** — it never issues tokens. Browser callers use
-RS256 JWTs issued by `auth.romaine.life` and verified against
-`https://auth.romaine.life/api/auth/jwks` with issuer
-`https://auth.romaine.life`. The legacy HS256 `api-jwt-signing-secret` path
-from the app-owned `ng6-fzt-frontend` Key Vault remains for existing
-terminal/CLI callers during migration.
+This backend **only verifies** — it never issues tokens. All callers (the
+my-homepage browser SPA and the fzt-automate CLI) present RS256 JWTs issued by
+`auth.romaine.life`, verified against `https://auth.romaine.life/api/auth/jwks`
+with issuer `https://auth.romaine.life`. Tokens whose `role` is outside
+`{admin, user, service}` are rejected (403). The legacy HS256 shared-secret
+path was removed in the auth.romaine.life migration — there is no fallback
+(see `scripts/check-no-hs256.mjs`, the CI guard against reintroduction).
 
-Bearer header preferred; legacy cookie `auth_token=` accepted as fallback.
+Bearer header preferred; cookie `auth_token=` accepted as a fallback.
 Identity claims (`sub`, `email`, `name`, `role`) are baked into the token
 payload — there is **no per-tree ACL**. Any authenticated caller can read or
 write any tree id. Identity-based scoping is enforced client-side by choosing
-which tree ids to fetch and save (e.g. `nelson-bookmarks` vs
-`nelson-ea-bookmarks`).
-
-Adding an identity: edit `claims.go` in this repo *and* the
-`IDENTITIES` dict in `romaine-api.py` — the duplication is intentional
-(one Go consumer, one Python consumer, both self-contained).
+which tree ids to fetch and save: the opaque `sub` keys each caller's trees
+(`<sub>-menu`, `<sub>-bookmarks`).
 
 ## Cosmos schema
 
@@ -140,8 +137,9 @@ curl -H "Authorization: Bearer $TOKEN" \
 cd backend
 npm install
 PORT=3000 node server.js
-# server reads cosmosDbEndpoint + jwtSigningSecret via DefaultAzureCredential —
-# `az login` against a principal with read access on ng6-fzt-frontend first.
+# server reads cosmosDbEndpoint via DefaultAzureCredential — `az login`
+# against a principal with App Configuration Data Reader first. Token
+# verification needs no secret: it fetches the auth.romaine.life JWKS over HTTP.
 ```
 
 Frontend dev (Go-WASM fzt terminal): see `fzt-terminal/CLAUDE.md` for

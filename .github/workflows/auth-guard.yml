@@ -1,0 +1,22 @@
+name: Auth Guard
+
+# Fails if the retired HS256 (api-jwt-signing-secret) verification surface is
+# reintroduced into source. Always runs — it's a fast source grep, no paths
+# filter — so it reports on every PR and can be wired as a required check.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  no-hs256:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/check-no-hs256.mjs
