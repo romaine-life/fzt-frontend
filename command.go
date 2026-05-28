@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/nelsong6/fzt/core"
 )
@@ -270,7 +269,7 @@ func buildCoreLevelCommandTree(registry []string, ctlFolderIdx int, versionIdx i
 	}
 	coreCmds := []coreCmd{
 		{[]string{"updatetimer", "Show time to next sync check"}, "updatetimer", ""},
-		{[]string{"validate", "Validate credential store"}, "validate", ""},
+		{[]string{"validate", "Validate auth token"}, "validate", ""},
 	}
 	for _, cmd := range coreCmds {
 		if cmd.condition != "" && !hasEnvTag(envTags, cmd.condition) {
@@ -344,7 +343,7 @@ func buildTwoLevelCommandTree(s *core.State, ctlFolderIdx int, feIdx int, coreId
 	}
 	coreCmds := []coreCmd{
 		{[]string{"updatetimer", "Show time to next sync check"}, "updatetimer", ""},
-		{[]string{"validate", "Validate credential store"}, "validate", ""},
+		{[]string{"validate", "Validate auth token"}, "validate", ""},
 	}
 	for _, cmd := range coreCmds {
 		if cmd.condition != "" && !hasEnvTag(envTags, cmd.condition) {
@@ -465,7 +464,7 @@ func HandleCommandAction(s *core.State, item core.Item) string {
 		// `version`. No persistent display; gets wiped by the next status.
 		label := s.IdentityLabel
 		if label == "" {
-			label = "(no identity loaded)"
+			label = "(not signed in — run authromaine)"
 		}
 		s.SetTitle(label, 1)
 		return ""
@@ -488,38 +487,8 @@ func HandleCommandAction(s *core.State, item core.Item) string {
 	case "validate":
 		HandleValidate(s)
 		return ""
-	case "load-nelson", "load-nelson-ea", "load-nelson-r1":
-		identity := strings.TrimPrefix(action, "load-")
-		if s.ConfigDir == "" {
-			s.SetTitle("no config directory set", 2)
-			return ""
-		}
-		if err := os.WriteFile(filepath.Join(s.ConfigDir, ".identity"), []byte(identity), 0644); err != nil {
-			s.SetTitle(fmt.Sprintf("failed to write identity: %v", err), 2)
-			return ""
-		}
-		s.IdentityLabel = identity
-		// Auto-sync after loading identity
-		secret := s.JWTSecret
-		if secret == "" {
-			var err error
-			secret, err = ReadJWTSecret()
-			if err != nil {
-				s.SetTitle(err.Error(), 2)
-				return ""
-			}
-			s.JWTSecret = secret
-		}
-		_, ver, err := SyncMenu(s.ConfigDir, secret)
-		if err != nil {
-			s.SetTitle(fmt.Sprintf("loaded %s but sync failed: %v", identity, err), 2)
-			return ""
-		}
-		s.MenuVersion = ver
-		return "loaded"
 	case "unload":
 		if s.ConfigDir != "" {
-			os.Remove(filepath.Join(s.ConfigDir, ".identity"))
 			os.Remove(filepath.Join(s.ConfigDir, "menu-cache.yaml"))
 		}
 		return "unloaded"
@@ -528,17 +497,7 @@ func HandleCommandAction(s *core.State, item core.Item) string {
 			s.SetTitle("no config directory set", 2)
 			return ""
 		}
-		secret := s.JWTSecret
-		if secret == "" {
-			var err error
-			secret, err = ReadJWTSecret()
-			if err != nil {
-				s.SetTitle(err.Error(), 2)
-				return ""
-			}
-			s.JWTSecret = secret
-		}
-		count, ver, err := SyncMenu(s.ConfigDir, secret)
+		count, ver, err := SyncMenu(s.ConfigDir)
 		if err != nil {
 			s.SetTitle(err.Error(), 2)
 			return ""
@@ -575,19 +534,9 @@ func HandleCommandAction(s *core.State, item core.Item) string {
 			s.SetTitle("no unsaved changes", 0)
 			return ""
 		}
-		secret := s.JWTSecret
-		if secret == "" {
-			var err error
-			secret, err = ReadJWTSecret()
-			if err != nil {
-				s.SetTitle(err.Error(), 2)
-				return ""
-			}
-			s.JWTSecret = secret
-		}
 		ctx := s.TopCtx()
 		menu := core.SerializeTree(ctx)
-		version, err := SaveMenu(s.ConfigDir, secret, menu, s.MenuVersion)
+		version, err := SaveMenu(s.ConfigDir, menu, s.MenuVersion)
 		if err != nil {
 			s.SetTitle(err.Error(), 2)
 			return ""

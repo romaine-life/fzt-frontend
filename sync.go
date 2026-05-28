@@ -2,9 +2,6 @@ package frontend
 
 import (
 	"bytes"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,46 +13,6 @@ import (
 )
 
 const APIBase = "https://fzt-frontend.romaine.life/fzt"
-
-// IdentityClaims holds JWT payload claims for an identity.
-type IdentityClaims struct {
-	Sub   string `json:"sub"`
-	Email string `json:"email"`
-	Name  string `json:"name"`
-	Role  string `json:"role"`
-}
-
-// LoadIdentityClaims reads the loaded identity name from `.identity` in
-// configDir and looks up its claims from the baked-in map in claims.go.
-// identities.json is no longer used — claims are source-controlled Go code.
-func LoadIdentityClaims(configDir string) (string, IdentityClaims, error) {
-	identityName, err := ReadTrimmedFile(filepath.Join(configDir, ".identity"))
-	if err != nil {
-		return "", IdentityClaims{}, fmt.Errorf("no identity loaded — use load first")
-	}
-	c, ok := identityClaims[identityName]
-	if !ok {
-		return "", IdentityClaims{}, fmt.Errorf("unknown identity: %s", identityName)
-	}
-	return identityName, c, nil
-}
-
-// MintJWT creates a short-lived HS256 JWT (5 minute expiry).
-func MintJWT(secret string, claims IdentityClaims) string {
-	header := Base64URLEncode([]byte(`{"alg":"HS256","typ":"JWT"}`))
-
-	now := time.Now().Unix()
-	payload := fmt.Sprintf(`{"sub":"%s","email":"%s","name":"%s","role":"%s","iat":%d,"exp":%d}`,
-		claims.Sub, claims.Email, claims.Name, claims.Role, now, now+300)
-	payloadEnc := Base64URLEncode([]byte(payload))
-
-	msg := header + "." + payloadEnc
-	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write([]byte(msg))
-	sig := Base64URLEncode(mac.Sum(nil))
-
-	return msg + "." + sig
-}
 
 // StripMetadata removes keys starting with "_" from bookmark objects recursively.
 func StripMetadata(items []interface{}) []interface{} {
@@ -182,16 +139,19 @@ func MenuTreeID(sub string) string {
 }
 
 // SyncMenu fetches the caller's menu tree from the API and writes the cache
-// file as YAML. Thin wrapper over FetchTree(MenuTreeID(claims.Sub)).
+// file as YAML. The tree id is keyed by the auth.romaine.life token's `sub`.
 // Returns (item count, version number, error).
-func SyncMenu(configDir, secret string) (int, int, error) {
-	_, claims, err := LoadIdentityClaims(configDir)
+func SyncMenu(configDir string) (int, int, error) {
+	token, err := ReadAuthToken(configDir)
+	if err != nil {
+		return 0, 0, err
+	}
+	sub, err := SubFromToken(token)
 	if err != nil {
 		return 0, 0, err
 	}
 
-	token := MintJWT(secret, claims)
-	menu, version, _, err := FetchTree(token, MenuTreeID(claims.Sub))
+	menu, version, _, err := FetchTree(token, MenuTreeID(sub))
 	if err != nil {
 		return 0, 0, fmt.Errorf("API error: %w", err)
 	}
@@ -212,16 +172,19 @@ func SyncMenu(configDir, secret string) (int, int, error) {
 	return len(menu), version, nil
 }
 
-// SaveMenu PUTs the caller's menu tree and updates the local cache. Thin
-// wrapper over SaveTree(MenuTreeID(claims.Sub)). Returns the new version.
-func SaveMenu(configDir, secret string, menu []interface{}, baseVersion int) (int, error) {
-	_, claims, err := LoadIdentityClaims(configDir)
+// SaveMenu PUTs the caller's menu tree and updates the local cache. The tree
+// id is keyed by the auth.romaine.life token's `sub`. Returns the new version.
+func SaveMenu(configDir string, menu []interface{}, baseVersion int) (int, error) {
+	token, err := ReadAuthToken(configDir)
+	if err != nil {
+		return 0, err
+	}
+	sub, err := SubFromToken(token)
 	if err != nil {
 		return 0, err
 	}
 
-	token := MintJWT(secret, claims)
-	version, err := SaveTree(token, MenuTreeID(claims.Sub), menu, baseVersion)
+	version, err := SaveTree(token, MenuTreeID(sub), menu, baseVersion)
 	if err != nil {
 		return 0, err
 	}
@@ -281,20 +244,6 @@ func marshalYAMLItems(items []interface{}, indent int) []byte {
 	return buf
 }
 
-// Base64URLEncode encodes data as base64url without padding.
-func Base64URLEncode(data []byte) string {
-	return strings.TrimRight(base64.URLEncoding.EncodeToString(data), "=")
-}
-
-// ReadTrimmedFile reads a file and returns its trimmed content.
-func ReadTrimmedFile(path string) (string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(data)), nil
-}
-
 // CheckBookmarkStaleness checks if the local menu cache is older than what the
 // API has. Returns true if the cache is missing or the server has a newer
 // version. Used by the tui's background sync ticker. Does not modify state.
@@ -302,22 +251,17 @@ func ReadTrimmedFile(path string) (string, error) {
 // Extracted from fzt-terminal/tui/sync.go during the fzt-frontend split so the
 // "fetch and compare" logic lives alongside the other API-calling code rather
 // than inside the renderer.
-func CheckBookmarkStaleness(configDir string, secret string) bool {
-	if secret == "" {
-		var err error
-		secret, err = ReadJWTSecret()
-		if err != nil {
-			return false
-		}
+func CheckBookmarkStaleness(configDir string) bool {
+	token, err := ReadAuthToken(configDir)
+	if err != nil {
+		return false
 	}
-
-	_, claims, err := LoadIdentityClaims(configDir)
+	sub, err := SubFromToken(token)
 	if err != nil {
 		return false
 	}
 
-	token := MintJWT(secret, claims)
-	_, _, updatedAt, err := FetchTree(token, MenuTreeID(claims.Sub))
+	_, _, updatedAt, err := FetchTree(token, MenuTreeID(sub))
 	if err != nil {
 		return false
 	}
