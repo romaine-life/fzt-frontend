@@ -2,4 +2,4 @@
 # push to main (via `sed` on this file).
 image:
   repository: romainecr.azurecr.io/fzt-frontend
-  tag: 51008bc
+  tag: 7b58103
