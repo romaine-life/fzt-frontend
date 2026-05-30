@@ -3,4 +3,4 @@
 image:
   repository: romainecr.azurecr.io/fzt-frontend
   # Quoted on purpose: a bare SHA like 4255e97 is valid YAML scientific notation; keep the quotes.
-  tag: "7b58103"
+  tag: "73e4054"
