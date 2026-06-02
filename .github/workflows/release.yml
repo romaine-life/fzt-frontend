@@ -20,4 +20,4 @@ permissions:
 
 jobs:
   release:
-    uses: nelsong6/pipeline-templates/.github/workflows/release-and-dispatch-template.yml@main
+    uses: romaine-life/pipeline-templates/.github/workflows/release-and-dispatch-template.yml@main
