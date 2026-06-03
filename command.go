@@ -2,7 +2,7 @@
 // command palette mechanics, frontend identity, and action routing.
 //
 // Every tool that wants to be an "fzt app" imports this package alongside
-// the fzt engine (github.com/nelsong6/fzt/core).
+// the fzt engine (github.com/romaine-life/fzt/core).
 package frontend
 
 import (
@@ -10,7 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/nelsong6/fzt/core"
+	"github.com/romaine-life/fzt/core"
 )
 
 // EngineVersion is the fzt engine version this build was compiled against.

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nelsong6/fzt/core"
+	"github.com/romaine-life/fzt/core"
 )
 
 // utf8BOM is the UTF-8 byte order mark. Token files written by the

@@ -1,8 +1,8 @@
-module github.com/nelsong6/fzt-frontend
+module github.com/romaine-life/fzt-frontend
 
 go 1.26.1
 
-require github.com/nelsong6/fzt v0.2.73
+require github.com/romaine-life/fzt v0.2.74
 
 require (
 	github.com/gdamore/encoding v1.0.1 // indirect
