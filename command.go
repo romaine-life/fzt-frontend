@@ -14,7 +14,7 @@ import (
 )
 
 // EngineVersion is the fzt engine version this build was compiled against.
-// Set via ldflags: -X github.com/nelsong6/fzt-frontend.EngineVersion=v0.2.39
+// Set via ldflags: -X github.com/romaine-life/fzt-frontend.EngineVersion=v0.2.39
 var EngineVersion = "dev"
 
 // cmdAction creates an *ItemAction with type "command" for command palette items.
