@@ -2,7 +2,10 @@ module github.com/romaine-life/fzt-frontend
 
 go 1.26.1
 
-require github.com/romaine-life/fzt v0.2.74
+require (
+	github.com/romaine-life/fzt v0.2.74
+	gopkg.in/yaml.v3 v3.0.1
+)
 
 require (
 	github.com/gdamore/encoding v1.0.1 // indirect
@@ -12,5 +15,4 @@ require (
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/term v0.37.0 // indirect
 	golang.org/x/text v0.31.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
