@@ -10,6 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/romaine-life/fzt/core"
+	"gopkg.in/yaml.v3"
 )
 
 const APIBase = "https://fzt-frontend.romaine.life/fzt"
@@ -203,45 +206,30 @@ func SaveMenu(configDir string, menu []interface{}, baseVersion int) (int, error
 }
 
 // MenuToYAML converts the API menu response (JSON objects) to YAML format
-// compatible with fzt's LoadYAML.
+// compatible with fzt's LoadYAML, encoded by the same YAML library that reads it.
 func MenuToYAML(items []interface{}) ([]byte, error) {
-	return marshalYAMLItems(items, 0), nil
+	return yaml.Marshal(yamlEntries(items))
 }
 
-func marshalYAMLItems(items []interface{}, indent int) []byte {
-	var buf []byte
-	prefix := strings.Repeat("  ", indent)
+func yamlEntries(items []interface{}) []core.YAMLEntry {
+	var entries []core.YAMLEntry
 	for _, item := range items {
 		m, ok := item.(map[string]interface{})
 		if !ok {
 			continue
 		}
-		name, _ := m["name"].(string)
-		desc, _ := m["description"].(string)
-		url, _ := m["url"].(string)
-		action, _ := m["action"].(string)
-		hidden, _ := m["hidden"].(bool)
-		children, hasChildren := m["children"].([]interface{})
-
-		buf = append(buf, []byte(prefix+"- name: \""+name+"\"\n")...)
-		if desc != "" {
-			buf = append(buf, []byte(prefix+"  description: \""+desc+"\"\n")...)
+		e := core.YAMLEntry{}
+		e.Name, _ = m["name"].(string)
+		e.Description, _ = m["description"].(string)
+		e.URL, _ = m["url"].(string)
+		e.Action, _ = m["action"].(string)
+		e.Hidden, _ = m["hidden"].(bool)
+		if children, _ := m["children"].([]interface{}); len(children) > 0 {
+			e.Children = yamlEntries(children)
 		}
-		if url != "" {
-			buf = append(buf, []byte(prefix+"  url: \""+url+"\"\n")...)
-		}
-		if action != "" {
-			buf = append(buf, []byte(prefix+"  action: \""+action+"\"\n")...)
-		}
-		if hidden {
-			buf = append(buf, []byte(prefix+"  hidden: true\n")...)
-		}
-		if hasChildren && len(children) > 0 {
-			buf = append(buf, []byte(prefix+"  children:\n")...)
-			buf = append(buf, marshalYAMLItems(children, indent+2)...)
-		}
+		entries = append(entries, e)
 	}
-	return buf
+	return entries
 }
 
 // CheckBookmarkStaleness checks if the local menu cache is older than what the
