@@ -224,6 +224,8 @@ func yamlEntries(items []interface{}) []core.YAMLEntry {
 		e.URL, _ = m["url"].(string)
 		e.Action, _ = m["action"].(string)
 		e.Hidden, _ = m["hidden"].(bool)
+		e.Quick, _ = m["quick"].(bool)
+		e.Input, _ = m["input"].(string)
 		if children, _ := m["children"].([]interface{}); len(children) > 0 {
 			e.Children = yamlEntries(children)
 		}
