@@ -1,21 +1,10 @@
-# Shared Azure data sources. Underlying resources (RG, AKS, Cosmos account,
-# App Configuration store) live in other repos' state — this stack only reads
-# them.
+# Shared Azure data sources. Underlying resources (RG, AKS) live in
+# other repos' state — this stack only reads them.
 
 data "azurerm_client_config" "current" {}
 
 data "azurerm_resource_group" "main" {
   name = var.resource_group_name
-}
-
-data "azurerm_cosmosdb_account" "serverless" {
-  name                = var.cosmos_account_name
-  resource_group_name = var.resource_group_name
-}
-
-data "azurerm_app_configuration" "main" {
-  name                = var.app_configuration_name
-  resource_group_name = var.resource_group_name
 }
 
 # infra-bootstrap publishes the AKS OIDC issuer URL on its remote state.

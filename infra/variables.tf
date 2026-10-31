@@ -15,15 +15,3 @@ variable "key_vault_name" {
   type        = string
   default     = "ng6-fzt-frontend"
 }
-
-variable "cosmos_account_name" {
-  description = "Shared Cosmos account that holds HomepageDB."
-  type        = string
-  default     = "infra-cosmos-serverless"
-}
-
-variable "app_configuration_name" {
-  description = "Shared App Configuration store the pod's config.js reads `cosmos_db_endpoint` from."
-  type        = string
-  default     = "infra-appconfig"
-}

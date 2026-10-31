@@ -31,40 +31,10 @@ import {
 # ----------------------------------------------------------------------------
 # Data-plane grants the pod actually uses
 # ----------------------------------------------------------------------------
-# Cosmos data-plane on HomepageDB — Built-in Data Contributor lets the
-# pod query the fzt-frontend-data container.
-resource "azurerm_cosmosdb_sql_role_assignment" "fzt_frontend_cosmos" {
-  resource_group_name = data.azurerm_resource_group.main.name
-  account_name        = data.azurerm_cosmosdb_account.serverless.name
-  role_definition_id  = "${data.azurerm_cosmosdb_account.serverless.id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002"
-  principal_id        = azurerm_user_assigned_identity.fzt_frontend.principal_id
-  # `<account>/dbs/<name>` — Cosmos data plane scope, NOT the ARM ID.
-  scope = "${data.azurerm_cosmosdb_account.serverless.id}/dbs/HomepageDB"
-}
-
-import {
-  to = azurerm_cosmosdb_sql_role_assignment.fzt_frontend_cosmos
-  id = "/subscriptions/aee0cbd2-8074-4001-b610-0f8edb4eaa3c/resourceGroups/infra/providers/Microsoft.DocumentDB/databaseAccounts/infra-cosmos-serverless/sqlRoleAssignments/07fcc69e-6c65-c5e5-2d9f-b6a0aa11b8df"
-}
-
 resource "azurerm_role_assignment" "fzt_frontend_app_keyvault" {
   scope                = azurerm_key_vault.main.id
   role_definition_name = "Key Vault Secrets User"
   principal_id         = azurerm_user_assigned_identity.fzt_frontend.principal_id
-}
-
-# App Configuration Data Reader at store level — config.js reads
-# `cosmos_db_endpoint`; the simplest correct grant is Data Reader on the
-# whole store (App Config has no per-key RBAC).
-resource "azurerm_role_assignment" "fzt_frontend_appconfig" {
-  scope                = data.azurerm_app_configuration.main.id
-  role_definition_name = "App Configuration Data Reader"
-  principal_id         = azurerm_user_assigned_identity.fzt_frontend.principal_id
-}
-
-import {
-  to = azurerm_role_assignment.fzt_frontend_appconfig
-  id = "/subscriptions/aee0cbd2-8074-4001-b610-0f8edb4eaa3c/resourceGroups/infra/providers/Microsoft.AppConfiguration/configurationStores/infra-appconfig/providers/Microsoft.Authorization/roleAssignments/f7388862-5796-cc61-c5b6-96473994e781"
 }
 
 # ----------------------------------------------------------------------------
