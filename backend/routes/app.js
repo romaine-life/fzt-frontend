@@ -1,30 +1,18 @@
 import { Router } from 'express';
+import { ConflictError, InvalidTreeError } from '../store.js';
 
 /**
  * Creates the unified fzt-frontend tree routes.
  *
- * Every tree is an entity with a flat string id (e.g. `nelson-bookmarks`,
- * `nelson-menu`, `google`). No namespace, no ACL scoping — any
+ * Every tree is an entity with a flat string id (e.g. `<sub>-menu`,
+ * `<sub>-bookmarks`, `google`). No namespace, no ACL scoping — any
  * authenticated caller can read/write any tree. Identity-based scoping
  * is enforced client-side by choosing which ids to fetch/save.
  *
- * Trees are stored as append-only versioned docs in Cosmos. Each save
- * bumps `version` by 1. GET returns the latest.
- *
- * Doc schema:
- *   {
- *     id: `tree_<treeId>_v<N>`,   // unique per version
- *     userId: '<treeId>',         // /userId partition value — one partition per tree
- *     treeId: '<treeId>',
- *     type: 'tree',
- *     version: N,
- *     tree: ...,                  // array or object
- *     updatedAt: ISO string
- *   }
- *
- * The container's partition key path is `/userId` (legacy name from
- * its pre-tree era). Each tree lives in its own partition keyed by its
- * id. `userId` and `treeId` always hold the same value on new docs.
+ * Trees live in the romaine-life/at repo as trees/<id>.json
+ * ({ version, updatedAt, tree }); each save is a commit to its main that
+ * bumps `version` by 1. A menu save must keep the store's invariants:
+ * every entry runs a command the store has, and every command keeps an entry.
  *
  * Refs within a tree use the shape `{ ref: "<treeId>" }`. The GET
  * handler recursively expands them (cycle-guarded, depth-limited),
@@ -35,27 +23,13 @@ import { Router } from 'express';
  *
  * @param {{
  *   requireAuth: Function,
- *   container: import('@azure/cosmos').Container,  // HomepageDB.fzt-frontend-data
+ *   store: import('../store.js').Store,
  * }} opts
  */
-export function createFztFrontendRoutes({ requireAuth, container }) {
+export function createFztFrontendRoutes({ requireAuth, store }) {
   const router = Router();
 
   const MAX_REF_DEPTH = 10;
-
-  function versionDocId(treeId, version) {
-    return `tree_${treeId}_v${version}`;
-  }
-
-  async function getLatestTree(treeId) {
-    const { resources } = await container.items.query({
-      query: `SELECT TOP 1 * FROM c
-              WHERE c.type = 'tree' AND c.treeId = @id
-              ORDER BY c.version DESC`,
-      parameters: [{ name: '@id', value: treeId }],
-    }, { partitionKey: treeId }).fetchAll();
-    return resources[0] || null;
-  }
 
   async function resolveRefs(items, visited = new Set()) {
     if (!Array.isArray(items)) return items;
@@ -71,7 +45,12 @@ export function createFztFrontendRoutes({ requireAuth, container }) {
           out.push({ ...item, _refError: true });
           continue;
         }
-        const target = await getLatestTree(item.ref);
+        let target = null;
+        try {
+          target = await store.read(item.ref);
+        } catch (err) {
+          if (!(err instanceof InvalidTreeError)) throw err;
+        }
         if (!target) {
           out.push({ ...item, _refError: true });
           continue;
@@ -119,7 +98,7 @@ export function createFztFrontendRoutes({ requireAuth, container }) {
   router.get('/tree/:id', requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
-      const latest = await getLatestTree(id);
+      const latest = await store.read(id);
       if (!latest) {
         // Never-saved tree — return empty at v0 so consumers don't branch on 404.
         // A subsequent PUT with baseVersion=0 creates v1.
@@ -133,6 +112,9 @@ export function createFztFrontendRoutes({ requireAuth, container }) {
         updatedAt: latest.updatedAt,
       });
     } catch (error) {
+      if (error instanceof InvalidTreeError) {
+        return res.status(400).json({ error: error.message });
+      }
       console.error('Error fetching tree:', error);
       res.status(500).json({ error: 'Failed to fetch tree', message: error.message });
     }
@@ -147,39 +129,26 @@ export function createFztFrontendRoutes({ requireAuth, container }) {
         return res.status(400).json({ error: 'Request body must contain a tree field' });
       }
 
-      const latest = await getLatestTree(id);
-      const latestVersion = latest?.version || 0;
-      if (baseVersion !== undefined && baseVersion !== null && baseVersion !== latestVersion) {
-        return res.status(409).json({
-          error: 'Conflict detected',
-          message: 'Tree has been modified elsewhere.',
-          currentTree: latest ? await resolveRefs(latest.tree) : [],
-          currentVersion: latestVersion,
-        });
-      }
-
-      const stripped = stripRefs(tree);
-      const newVersion = latestVersion + 1;
-      const now = new Date().toISOString();
-
-      await container.items.create({
-        id: versionDocId(id, newVersion),
-        userId: id,
-        treeId: id,
-        type: 'tree',
-        version: newVersion,
-        tree: stripped,
-        updatedAt: now,
-      });
-
-      const resolved = await resolveRefs(stripped);
+      const author = req.user?.email || req.user?.name || req.user?.sub || 'unknown';
+      const saved = await store.write(id, stripRefs(tree), baseVersion, author);
       res.json({
         id,
-        tree: resolved,
-        version: newVersion,
-        updatedAt: now,
+        tree: await resolveRefs(saved.tree),
+        version: saved.version,
+        updatedAt: saved.updatedAt,
       });
     } catch (error) {
+      if (error instanceof ConflictError) {
+        return res.status(409).json({
+          error: 'Conflict detected',
+          message: error.message,
+          currentTree: error.current ? await resolveRefs(error.current.tree) : [],
+          currentVersion: error.current?.version || 0,
+        });
+      }
+      if (error instanceof InvalidTreeError) {
+        return res.status(422).json({ error: 'Tree rejected', message: error.message });
+      }
       console.error('Error saving tree:', error);
       res.status(500).json({ error: 'Failed to save tree', message: error.message });
     }

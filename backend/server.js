@@ -7,11 +7,11 @@ import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cors from 'cors';
-import { CosmosClient } from '@azure/cosmos';
 import { DefaultAzureCredential } from '@azure/identity';
+import { SecretClient } from '@azure/keyvault-secrets';
 import { createFztFrontendRoutes } from './routes/index.js';
 import { createRequireAuth } from './auth.js';
-import { fetchConfig } from './config.js';
+import { Store } from './store.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -33,21 +33,19 @@ app.get('/health', (req, res) => {
 });
 
 async function start() {
-  const config = await fetchConfig();
-
-  const credential = new DefaultAzureCredential();
-  const cosmosClient = new CosmosClient({
-    endpoint: config.cosmosDbEndpoint,
-    aadCredentials: credential,
+  // Trees live in the romaine-life/at repo; the backend pushes with a deploy key
+  // scoped to that one repo, kept in this app's Key Vault.
+  const vault = new SecretClient(process.env.KEY_VAULT_URL, new DefaultAzureCredential());
+  const { value: deployKey } = await vault.getSecret('at-store-deploy-key');
+  const store = await Store.open({
+    repoUrl: process.env.STORE_REPO || 'git@github.com:romaine-life/at.git',
+    dir: process.env.STORE_DIR || '/app/store',
+    deployKey,
   });
-  // Tree data lives in HomepageDB.fzt-frontend-data (legacy container name
-  // carried forward from pre-tree era — every tree owns its own partition
-  // keyed by its id).
-  const container = cosmosClient.database('HomepageDB').container('fzt-frontend-data');
 
   const requireAuth = createRequireAuth();
 
-  app.use('/fzt', createFztFrontendRoutes({ requireAuth, container }));
+  app.use('/fzt', createFztFrontendRoutes({ requireAuth, store }));
 
   serverReady = true;
   console.log(`[fzt-frontend] ready on port ${PORT}`);
