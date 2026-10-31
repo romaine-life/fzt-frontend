@@ -1,5 +1,8 @@
 FROM node:20-alpine
 
+# The tree store is a git clone of romaine-life/at, reached over SSH.
+RUN apk add --no-cache git openssh-client
+
 WORKDIR /app
 
 COPY backend/package*.json backend/

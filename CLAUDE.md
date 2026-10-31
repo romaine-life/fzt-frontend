@@ -32,8 +32,8 @@ my-homepage           romaine-api.py            (any browser tab,
        └────────────────────────────────────────────────┘
                              │
                              v
-                     Cosmos: HomepageDB.fzt-frontend-data
-                     (partition key /userId, one tree per partition)
+                     git: romaine-life/at, trees/<id>.json
+                     (each write a commit to main)
 ```
 
 my-homepage is a static frontend — it owns no data. Anything that wants
@@ -75,27 +75,26 @@ write any tree id. Identity-based scoping is enforced client-side by choosing
 which tree ids to fetch and save: the opaque `sub` keys each caller's trees
 (`<sub>-menu`, `<sub>-bookmarks`).
 
-## Cosmos schema
+## Store
 
-Database `HomepageDB`, container `fzt-frontend-data` (legacy name from
-the pre-tree era — every tree owns its own partition keyed by its id).
+Trees live in the private repo [romaine-life/at](https://github.com/romaine-life/at),
+which also holds the `at` menu's commands, as `trees/<id>.json`:
+`{ "version": N, "updatedAt": ISO8601, "tree": <array or object> }`.
+`backend/store.js` keeps a clone. A PUT is a commit pushed straight to that repo's
+main (no PR, no CI: the backend checks the same invariants CI does); git's push is
+the arbiter between writers, and a writer that loses the race starts again from the
+new main, so a stale `baseVersion` still returns 409. History is the repo's history.
 
-Each PUT writes a new doc — versions are append-only:
+Menu trees (`*-menu`) must keep the store's invariant: every entry that runs a
+command names one in `commands/`, and every command keeps an entry. A PUT that
+breaks it returns 422 with the reasons. New commands arrive by PR in that repo,
+script and entry together.
 
-```js
-{
-  id:       `tree_${treeId}_v${version}`,
-  userId:   treeId,        // partition key path is /userId
-  treeId:   treeId,
-  type:     'tree',
-  version:  N,
-  tree:     <array or object>,
-  updatedAt: ISO8601 string,
-}
-```
+The backend pushes with a deploy key scoped to that one repo, read at startup from
+Key Vault `ng6-fzt-frontend` as `at-store-deploy-key`, with GitHub's host key pinned.
 
-GETs `SELECT TOP 1 ... ORDER BY c.version DESC` — old versions stay
-readable directly by id but the API only ever surfaces the latest.
+The Cosmos container this replaced (`HomepageDB.fzt-frontend-data`) is archived,
+every version, in the store at `archive/cosmos-export.jsonl.gz`.
 
 ## Tree refs
 
@@ -137,8 +136,8 @@ curl -H "Authorization: Bearer $TOKEN" \
 cd backend
 npm install
 PORT=3000 node server.js
-# server reads cosmosDbEndpoint via DefaultAzureCredential — `az login`
-# against a principal with App Configuration Data Reader first. Token
+# server reads the store's deploy key from Key Vault via DefaultAzureCredential —
+# `az login` as a principal with Key Vault Secrets User on ng6-fzt-frontend. Token
 # verification needs no secret: it fetches the auth.romaine.life JWKS over HTTP.
 ```
 

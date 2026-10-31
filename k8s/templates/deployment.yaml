@@ -32,8 +32,6 @@ spec:
           env:
             - name: PORT
               value: "3000"
-            - name: AZURE_APP_CONFIG_ENDPOINT
-              value: https://infra-appconfig.azconfig.io
             - name: KEY_VAULT_URL
               value: https://ng6-fzt-frontend.vault.azure.net/
           resources:

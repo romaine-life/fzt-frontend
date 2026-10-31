@@ -14,3 +14,4 @@ backend/.env.local
 *.md
 .gitignore
 .npmrc
+backend/*.test.js
