@@ -115,7 +115,7 @@ func InjectCommandFolder(s *core.State, coreVersion string) {
 	if hasFrontend {
 		items = buildTwoLevelCommandTree(s, ctlFolderIdx, 0, 1, s.EnvTags) // feIdx=0, coreIdx=1
 	} else {
-		items = buildCoreLevelCommandTree(s.VersionRegistry, ctlFolderIdx, 0, s.EnvTags) // coreIdx=0
+		items = buildCoreLevelCommandTree(s.VersionRegistry, ctlFolderIdx, 0, s.EnvTags, s.TagMode) // coreIdx=0
 	}
 
 	// When the consumer opts into HidePalette, skip injection entirely.
@@ -240,9 +240,26 @@ func buildHelpSubfolder(items []core.Item, helpFolderIdx, parentIdx, depth int) 
 	return items, childIdxs
 }
 
+// coreCmd is a core palette command, shown when its condition is one of the
+// session's env tags (or has none).
+type coreCmd struct {
+	fields    []string
+	action    string
+	condition string
+}
+
+// coreCommands lists the core palette's conditional commands.
+func coreCommands(tagMode bool) []coreCmd {
+	return []coreCmd{
+		{[]string{"updatetimer", "Show time to next sync check"}, "updatetimer", ""},
+		{[]string{"validate", "Validate auth token"}, "validate", ""},
+		{[]string{"tags", tagModeDesc(tagMode)}, "tags", ""},
+	}
+}
+
 // buildCoreLevelCommandTree builds `:` → core commands directly (no frontend layer).
 // versionIdx is the index into State.VersionRegistry for this level's version string.
-func buildCoreLevelCommandTree(registry []string, ctlFolderIdx int, versionIdx int, envTags []string) []core.Item {
+func buildCoreLevelCommandTree(registry []string, ctlFolderIdx int, versionIdx int, envTags []string, tagMode bool) []core.Item {
 	idx := ctlFolderIdx + 1
 	var ctlChildren []int
 	var items []core.Item
@@ -261,16 +278,7 @@ func buildCoreLevelCommandTree(registry []string, ctlFolderIdx int, versionIdx i
 		ParentIdx: ctlFolderIdx, Action: cmdAction("version"), PropertyOf: -1,
 	})
 
-	// Conditional core commands
-	type coreCmd struct {
-		fields    []string
-		action    string
-		condition string
-	}
-	coreCmds := []coreCmd{
-		{[]string{"updatetimer", "Show time to next sync check"}, "updatetimer", ""},
-		{[]string{"validate", "Validate auth token"}, "validate", ""},
-	}
+	coreCmds := coreCommands(tagMode)
 	for _, cmd := range coreCmds {
 		if cmd.condition != "" && !hasEnvTag(envTags, cmd.condition) {
 			continue
@@ -307,6 +315,7 @@ func buildCoreLevelCommandTree(registry []string, ctlFolderIdx int, versionIdx i
 // version (1), whoami leaf (1), each FrontendCommand + its Children,
 // and the core subfolder. Items must be appended in the same order as indices were reserved.
 func buildTwoLevelCommandTree(s *core.State, ctlFolderIdx int, feIdx int, coreIdx int, envTags []string) []core.Item {
+	tagMode := s.TagMode
 	idx := ctlFolderIdx + 1
 	var ctlChildren []int
 
@@ -335,16 +344,7 @@ func buildTwoLevelCommandTree(s *core.State, ctlFolderIdx int, feIdx int, coreId
 	coreSubChildren := []int{coreVersionIdx}
 	idx++
 
-	// Conditional core commands
-	type coreCmd struct {
-		fields    []string
-		action    string
-		condition string
-	}
-	coreCmds := []coreCmd{
-		{[]string{"updatetimer", "Show time to next sync check"}, "updatetimer", ""},
-		{[]string{"validate", "Validate auth token"}, "validate", ""},
-	}
+	coreCmds := coreCommands(tagMode)
 	for _, cmd := range coreCmds {
 		if cmd.condition != "" && !hasEnvTag(envTags, cmd.condition) {
 			continue
@@ -486,6 +486,9 @@ func HandleCommandAction(s *core.State, item core.Item) string {
 		return ""
 	case "validate":
 		HandleValidate(s)
+		return ""
+	case "tags":
+		toggleTagMode(s)
 		return ""
 	case "unload":
 		if s.ConfigDir != "" {
