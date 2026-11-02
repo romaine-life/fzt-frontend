@@ -5,7 +5,7 @@ import { promisify } from 'node:util';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { Store, ConflictError, InvalidTreeError } from './store.js';
+import { Store, ConflictError, InvalidTreeError, splitArgs } from './store.js';
 
 const exec = promisify(execFile);
 let remote;
@@ -59,11 +59,33 @@ test('a stale baseVersion is a conflict carrying the current tree', async () => 
   });
 });
 
-test('a menu may not run a command the store lacks', async () => {
-  const store = await open('unknown');
+test('a menu may run built-ins and programs, which have no script in the store', async () => {
+  const store = await open('builtins');
   const current = await store.read('u-menu');
-  const tree = [...current.tree, { name: 'ghost' }];
-  await assert.rejects(store.write('u-menu', tree, current.version, 'tester'), /'ghost'/);
+  const tree = [...current.tree,
+    { name: 'lightsoff', action: 'lights off 30', quick: true },
+    { name: 'windows', action: 'folder:windows' },
+    { name: 'tuner', action: "uv run 'D:\\repos\\guitar-looper-cli\\guitar-tuner\\tuner.py'" },
+    { name: 'fnlock' }];
+  assert.equal((await store.write('u-menu', tree, current.version, 'tester')).version, current.version + 1);
+});
+
+test('an action whose quote is never closed is refused', async () => {
+  const store = await open('unclosed');
+  const current = await store.read('u-menu');
+  const tree = [...current.tree, { name: 'broken', action: "launch 'Google Chrome" }];
+  await assert.rejects(store.write('u-menu', tree, current.version, 'tester'), err => {
+    assert.ok(err instanceof InvalidTreeError);
+    assert.match(err.message, /\/broken: a quote in its action is never closed/);
+    return true;
+  });
+});
+
+test('splitArgs reads an action as fzt-automate does', () => {
+  assert.deepEqual(splitArgs("launch 'Slay the Spire 2' steam://rungameid/2868840"), ['launch', 'Slay the Spire 2', 'steam://rungameid/2868840']);
+  assert.deepEqual(splitArgs("launch 'Assassin''s Creed' x"), ['launch', "Assassin's Creed", 'x']);
+  assert.deepEqual(splitArgs('"C:\\Program Files\\x.exe" -c ""'), ['C:\\Program Files\\x.exe', '-c', '']);
+  assert.equal(splitArgs("a 'b"), null);
 });
 
 test('a menu may not drop the last entry for a command', async () => {

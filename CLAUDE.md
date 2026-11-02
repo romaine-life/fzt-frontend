@@ -85,10 +85,10 @@ main (no PR, no CI: the backend checks the same invariants CI does); git's push 
 the arbiter between writers, and a writer that loses the race starts again from the
 new main, so a stale `baseVersion` still returns 409. History is the repo's history.
 
-Menu trees (`*-menu`) must keep the store's invariant: every entry that runs a
-command names one in `commands/`, and every command keeps an entry. A PUT that
-breaks it returns 422 with the reasons. New commands arrive by PR in that repo,
-script and entry together.
+Menu trees (`*-menu`) must keep the store's invariant: every entry's action reads
+as an argument list (fzt-automate runs it with no shell, FZT-71: an fzt-automate
+built-in, a program, or a command still in `commands/`), and every command in
+`commands/` keeps an entry. A PUT that breaks it returns 422 with the reasons.
 
 The backend pushes with a deploy key scoped to that one repo, read at startup from
 Key Vault `ng6-fzt-frontend` as `at-store-deploy-key`, with GitHub's host key pinned.
