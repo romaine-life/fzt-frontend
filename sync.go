@@ -241,42 +241,35 @@ func yamlEntries(items []interface{}) []core.YAMLEntry {
 	return entries
 }
 
-// CheckBookmarkStaleness checks if the local menu cache is older than what the
-// API has. Returns true if the cache is missing or the server has a newer
-// version. Used by the tui's background sync ticker. Does not modify state.
-//
-// Extracted from fzt-terminal/tui/sync.go during the fzt-frontend split so the
-// "fetch and compare" logic lives alongside the other API-calling code rather
-// than inside the renderer.
-func CheckBookmarkStaleness(configDir string) bool {
+// CheckMenuStale reports whether the API has a newer menu than the local cache (or
+// there is no cache). Used by the tui's background sync check; it does not modify the
+// cache. A failure is returned, not read as "not stale", so the menu can say it
+// couldn't check: an *AuthError when signing in failed.
+func CheckMenuStale(configDir string) (bool, error) {
 	token, err := ReadAuthToken(configDir)
 	if err != nil {
-		return false
+		return false, err
 	}
 	sub, err := SubFromToken(token)
 	if err != nil {
-		return false
+		return false, err
 	}
 
 	_, _, updatedAt, err := FetchTree(token, MenuTreeID(sub))
 	if err != nil {
-		return false
+		return false, fmt.Errorf("checking the menu: %w", err)
 	}
-
 	if updatedAt == "" {
-		return false
+		return false, nil // never saved
 	}
-
 	serverTime, err := time.Parse(time.RFC3339Nano, updatedAt)
 	if err != nil {
-		return false
+		return false, fmt.Errorf("checking the menu: unreadable updatedAt %q", updatedAt)
 	}
 
-	cacheFile := filepath.Join(configDir, "menu-cache.yaml")
-	info, err := os.Stat(cacheFile)
+	info, err := os.Stat(filepath.Join(configDir, "menu-cache.yaml"))
 	if err != nil {
-		return true // no cache = stale
+		return true, nil // no cache = stale
 	}
-
-	return serverTime.After(info.ModTime())
+	return serverTime.After(info.ModTime()), nil
 }
