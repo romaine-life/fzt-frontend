@@ -10,8 +10,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -87,17 +89,18 @@ type AuthError struct {
 }
 
 func (e *AuthError) Error() string {
+	// Short enough for the menu's title bar, cause first.
 	switch e.Kind {
 	case AuthNotRegistered:
-		return "signed out: this PC isn't registered with auth.romaine.life (" + e.Detail + ")"
+		return "signed out: " + e.Detail
 	case AuthRevoked:
-		return "signed out: this PC's registration was revoked at auth.romaine.life/admin"
+		return "signed out: this PC was revoked at auth.romaine.life/admin"
 	case AuthKeyUnavailable:
-		return "signed out: this PC's sign-in key can't be used (" + e.Detail + ")"
+		return "signed out: can't use this PC's TPM key (" + e.Detail + ")"
 	case AuthUnreachable:
-		return "signed out: can't reach auth.romaine.life to renew sign-in (" + e.Detail + ")"
+		return "signed out: can't reach auth.romaine.life (" + e.Detail + ")"
 	default:
-		return "signed out: auth.romaine.life refused this PC's sign-in (" + e.Detail + ")"
+		return "signed out: auth.romaine.life refused this PC (" + e.Detail + ")"
 	}
 }
 
@@ -108,14 +111,14 @@ func readDeviceRegistration() (deviceRegistration, error) {
 	}
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return deviceRegistration{}, &AuthError{Kind: AuthNotRegistered, Detail: "no " + path}
+		return deviceRegistration{}, &AuthError{Kind: AuthNotRegistered, Detail: "this PC isn't registered (no ~/" + deviceRegistrationFile + ")"}
 	}
 	if err != nil {
-		return deviceRegistration{}, &AuthError{Kind: AuthNotRegistered, Detail: err.Error()}
+		return deviceRegistration{}, &AuthError{Kind: AuthNotRegistered, Detail: "can't read ~/" + deviceRegistrationFile + ": " + err.Error()}
 	}
 	var reg deviceRegistration
 	if err := json.Unmarshal(bytes.TrimPrefix(data, utf8BOM), &reg); err != nil || reg.DeviceID == "" || reg.TokenURL == "" {
-		return deviceRegistration{}, &AuthError{Kind: AuthNotRegistered, Detail: path + " is malformed"}
+		return deviceRegistration{}, &AuthError{Kind: AuthNotRegistered, Detail: "~/" + deviceRegistrationFile + " is malformed"}
 	}
 	return reg, nil
 }
@@ -168,7 +171,7 @@ func renewAuthToken(configDir string) (string, error) {
 	body, _ := json.Marshal(map[string]string{"assertion": assertion})
 	resp, err := deviceClient.Post(reg.TokenURL, "application/json", bytes.NewReader(body))
 	if err != nil {
-		return "", &AuthError{Kind: AuthUnreachable, Detail: err.Error()}
+		return "", &AuthError{Kind: AuthUnreachable, Detail: transportCause(err)}
 	}
 	defer resp.Body.Close()
 	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
@@ -207,10 +210,25 @@ func refusalError(status int, reason, message string) *AuthError {
 		return &AuthError{Kind: AuthUnreachable, Reason: reason, Detail: detail}
 	default:
 		if reason != "" {
-			detail = reason + ": " + detail
+			detail = reason
 		}
 		return &AuthError{Kind: AuthRefused, Reason: reason, Detail: detail}
 	}
+}
+
+// transportCause is the innermost cause of a failed request ("no such host",
+// "connection refused"), without the method, URL and dial steps net/http wraps
+// around it, which the message already names.
+func transportCause(err error) string {
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		err = ue.Err
+	}
+	msg := err.Error()
+	if i := strings.LastIndex(msg, ": "); i >= 0 {
+		msg = msg[i+2:]
+	}
+	return msg
 }
 
 // writeAuthToken replaces the token file in one rename, so a reader never sees half a
