@@ -126,11 +126,12 @@ func InjectCommandFolder(s *core.State, coreVersion string) {
 	if s.HidePalette {
 		return
 	}
-	// Tag every injected item so SerializeTree skips them on :save. The
-	// cloud menu only ever receives user data; the palette is always
-	// client-reconstructed.
+	// Injected: SerializeTree skips them on :save, since the palette is
+	// always client-reconstructed. Palette: a host runs them through
+	// HandleCommandAction, unlike its own injected rows.
 	for i := range items {
 		items[i].Injected = true
+		items[i].Palette = true
 	}
 	ctx.AllItems = append(ctx.AllItems, items...)
 	ctx.Items = core.RootItemsOf(ctx.AllItems)
