@@ -28,26 +28,66 @@ function isUrl(text) {
   return text.includes('://') || /^(https?|mailto):/.test(text);
 }
 
-// The command a menu node runs, or null for folders, URLs and refs. Matches
-// tools/check.py in the store, which CI runs on PRs.
-function commandOf(node) {
+// The action line a menu node runs, or null for folders, URLs and refs. A leaf
+// with no action or url runs by its name. Matches tools/check.py in the store,
+// which CI runs on PRs.
+function actionOf(node) {
   if ('ref' in node) return null;
   if (node.action) {
     if (isUrl(node.action)) return null;
-    return node.action.replace(/^folder:/, '').split(/\s+/)[0];
+    return node.action.replace(/^folder:/, '');
   }
   if ((node.children && node.children.length) || node.url) return null;
   return node.name || null;
 }
 
-function* menuCommands(tree, where = '') {
+// An action line as fzt-automate reads it (FZT-71): an argument list, no shell.
+// Words split on spaces; a stretch in single or double quotes is one word, and
+// inside it the quote character twice is one of it. Null when a quote is never
+// closed.
+export function splitArgs(line) {
+  const args = [];
+  let word = '';
+  let inWord = false;
+  let quote = null;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (quote) {
+      if (c === quote) {
+        if (line[i + 1] === quote) {
+          word += c;
+          i++;
+        } else {
+          quote = null;
+        }
+      } else {
+        word += c;
+      }
+    } else if (c === "'" || c === '"') {
+      quote = c;
+      inWord = true;
+    } else if (c === ' ' || c === '\t') {
+      if (inWord) args.push(word);
+      word = '';
+      inWord = false;
+    } else {
+      word += c;
+      inWord = true;
+    }
+  }
+  if (quote) return null;
+  if (inWord) args.push(word);
+  return args;
+}
+
+function* menuActions(tree, where = '') {
   if (!Array.isArray(tree)) return;
   for (const node of tree) {
     if (!node || typeof node !== 'object') continue;
     const here = `${where}/${node.name ?? '?'}`;
-    const cmd = commandOf(node);
-    if (cmd) yield [cmd, here];
-    yield* menuCommands(node.children, here);
+    const line = actionOf(node);
+    if (line) yield [line, here];
+    yield* menuActions(node.children, here);
   }
 }
 
@@ -120,15 +160,19 @@ export class Store {
     });
   }
 
-  // A menu may only run commands the store has, and every command must keep an entry.
+  // Every action must read as an argument list, and every command still in the
+  // store's commands/ must keep an entry. An action's first word is an
+  // fzt-automate built-in, a program, or one of those commands; fzt-automate
+  // says so when a pick names none of them.
   async checkMenu(tree) {
-    const have = new Set((await readdir(path.join(this.dir, 'commands')))
+    const have = new Set((await readdir(path.join(this.dir, 'commands')).catch(() => []))
       .filter(f => f.endsWith('.ps1')).map(f => f.slice(0, -4)));
     const used = new Set();
     const problems = [];
-    for (const [cmd, where] of menuCommands(tree)) {
-      used.add(cmd);
-      if (!have.has(cmd)) problems.push(`${where} runs '${cmd}', which is not a command in the store`);
+    for (const [line, where] of menuActions(tree)) {
+      const args = splitArgs(line);
+      if (args === null) problems.push(`${where}: a quote in its action is never closed`);
+      else if (args.length) used.add(args[0]);
     }
     for (const cmd of have) {
       if (!used.has(cmd)) problems.push(`'${cmd}' would have no menu entry`);
