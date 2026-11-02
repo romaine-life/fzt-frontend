@@ -226,6 +226,13 @@ func yamlEntries(items []interface{}) []core.YAMLEntry {
 		e.Hidden, _ = m["hidden"].(bool)
 		e.Quick, _ = m["quick"].(bool)
 		e.Input, _ = m["input"].(string)
+		if tags, _ := m["tags"].([]interface{}); len(tags) > 0 {
+			for _, t := range tags {
+				if tag, ok := t.(string); ok {
+					e.Tags = append(e.Tags, tag)
+				}
+			}
+		}
 		if children, _ := m["children"].([]interface{}); len(children) > 0 {
 			e.Children = yamlEntries(children)
 		}

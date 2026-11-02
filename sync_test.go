@@ -13,7 +13,7 @@ func TestMenuToYAMLRoundTrip(t *testing.T) {
 	menu := `[
 		{"name": "open", "description": "Open a program", "children": [
 			{"name": "rustdesk", "action": "launch 'RustDesk' '{6D809377-6AF0-444B-8957-A3773F02200E}\\RustDesk\\rustdesk.exe'"},
-			{"name": "lightson", "action": "lightson", "quick": true},
+			{"name": "lightson", "action": "lightson", "quick": true, "tags": ["lights", "home"]},
 			{"name": "ollamastop", "action": "ollamastop", "quick": true, "input": "model to stop"},
 			{"name": "say \"hi\"", "description": "colon: hash # and a\ttab", "action": "echo \"$x\""},
 			{"name": "Google", "description": "Google suite — mail, drive", "url": "https://mail.google.com", "hidden": true}
@@ -66,6 +66,9 @@ func TestMenuToYAMLRoundTrip(t *testing.T) {
 	}
 	if stop := byName["ollamastop"]; !stop.Quick || stop.Input != "model to stop" {
 		t.Errorf("ollamastop = quick %v input %q", stop.Quick, stop.Input)
+	}
+	if got := core.FormatTags(byName["lightson"].Tags); got != "lights home" {
+		t.Errorf("lightson tags = %q, want lights home", got)
 	}
 	if byName["rustdesk"].Quick {
 		t.Error("an entry with no quick key must not load as quick")
