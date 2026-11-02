@@ -263,3 +263,30 @@ func TestSignedInEmailNeverSignsIn(t *testing.T) {
 		t.Error("SignedInEmail touched the network")
 	}
 }
+
+// The reason shows in the menu's title bar beside the menu's age, so it must fit.
+func TestSignInMessagesFitTheTitle(t *testing.T) {
+	for _, e := range []*AuthError{
+		{Kind: AuthNotRegistered, Detail: "this PC isn't registered (no ~/" + deviceRegistrationFile + ")"},
+		refusalError(401, "device_not_registered", "this device isn't registered"),
+		refusalError(401, "device_revoked", "revoked"),
+		refusalError(403, "account_not_approved", "not approved"),
+		{Kind: AuthUnreachable, Detail: transportCause(errors.New("dial tcp: lookup auth.romaine.life: no such host"))},
+		{Kind: AuthKeyUnavailable, Detail: "NTE_BAD_KEYSET (0x80090016)"},
+	} {
+		if n := len([]rune(e.Error())); n > 80 {
+			t.Errorf("%d runes: %q", n, e.Error())
+		}
+	}
+}
+
+func TestUnreachableNamesTheCauseOnly(t *testing.T) {
+	f := newDeviceFixture(t, true)
+	path, _ := deviceRegistrationPath()
+	reg, _ := json.Marshal(deviceRegistration{DeviceID: "dev_test", TokenURL: "http://127.0.0.1:1/token"})
+	os.WriteFile(path, reg, 0o600)
+	_, err := ReadAuthToken(f.configDir)
+	if strings.Contains(err.Error(), "127.0.0.1:1/token") {
+		t.Errorf("message repeats the URL: %q", err)
+	}
+}
