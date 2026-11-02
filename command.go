@@ -464,7 +464,7 @@ func HandleCommandAction(s *core.State, item core.Item) string {
 		// `version`. No persistent display; gets wiped by the next status.
 		label := s.IdentityLabel
 		if label == "" {
-			label = "(not signed in — run authromaine)"
+			label = "(not signed in)"
 		}
 		s.SetTitle(label, 1)
 		return ""

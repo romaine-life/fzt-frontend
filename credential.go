@@ -13,18 +13,19 @@ import (
 	"github.com/romaine-life/fzt/core"
 )
 
-// utf8BOM is the UTF-8 byte order mark. Token files written by the
-// `authromaine` PowerShell helper (Set-Content -Encoding UTF8 on Windows
-// PowerShell 5.1) are prefixed with it; encoding/json rejects the BOM, so
-// strip it before unmarshalling.
+// utf8BOM is the UTF-8 byte order mark. Token and registration files written by
+// Windows PowerShell 5.1 (Set-Content -Encoding UTF8) start with it; encoding/json
+// rejects the BOM, so strip it before unmarshalling.
 var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 
-// authTokenFile holds the cached auth.romaine.life bearer token, written by
-// the login flow (the `authromaine` device-flow helper). fzt-frontend only
-// consumes it — it never mints tokens. Replaces the legacy HS256
-// `api-jwt-signing-secret` keyring path retired in the auth.romaine.life
-// migration.
+// authTokenFile holds the cached auth.romaine.life bearer token, {"token": "<jwt>"}.
+// On a registered home PC this package renews it from the device key (device.go);
+// a browser sign-in (`devctl auth`) also writes it.
 const authTokenFile = "auth-token.json"
+
+// renewMargin renews a token this close to expiry, so a request never carries one
+// that lapses on the way.
+const renewMargin = 5 * time.Minute
 
 // tokenClaims is the subset of the auth.romaine.life JWT payload we read.
 type tokenClaims struct {
@@ -53,30 +54,44 @@ func parseTokenClaims(token string) (tokenClaims, error) {
 	return c, nil
 }
 
-// ReadAuthToken returns the cached, unexpired auth.romaine.life bearer token
-// from <configDir>/auth-token.json, or a user-facing error pointing at the
-// login flow.
-func ReadAuthToken(configDir string) (string, error) {
-	path := filepath.Join(configDir, authTokenFile)
-	data, err := os.ReadFile(path)
+// readTokenFile returns the cached token and its claims, expired or not.
+func readTokenFile(configDir string) (string, tokenClaims, error) {
+	data, err := os.ReadFile(filepath.Join(configDir, authTokenFile))
 	if err != nil {
-		return "", fmt.Errorf("not signed in — run `authromaine` to get an auth.romaine.life token")
+		return "", tokenClaims{}, err
 	}
-	data = bytes.TrimPrefix(data, utf8BOM)
 	var doc struct {
 		Token string `json:"token"`
 	}
-	if err := json.Unmarshal(data, &doc); err != nil || doc.Token == "" {
-		return "", fmt.Errorf("auth token file is malformed — run `authromaine` to refresh")
+	if err := json.Unmarshal(bytes.TrimPrefix(data, utf8BOM), &doc); err != nil || doc.Token == "" {
+		return "", tokenClaims{}, fmt.Errorf("auth token file is malformed")
 	}
 	c, err := parseTokenClaims(doc.Token)
 	if err != nil {
-		return "", fmt.Errorf("auth token is unreadable — run `authromaine` to refresh")
+		return "", tokenClaims{}, fmt.Errorf("auth token is unreadable")
 	}
-	if c.Exp != 0 && time.Now().Unix() >= c.Exp {
-		return "", fmt.Errorf("auth token expired — run `authromaine` to refresh")
+	return doc.Token, c, nil
+}
+
+// ReadAuthToken returns a usable auth.romaine.life bearer token. The cached one is
+// used while it has more than renewMargin left; otherwise the PC signs in again with
+// its device key. A failure is an *AuthError saying why.
+func ReadAuthToken(configDir string) (string, error) {
+	token, c, err := readTokenFile(configDir)
+	if err == nil && (c.Exp == 0 || deviceNow().Add(renewMargin).Unix() < c.Exp) {
+		return token, nil
 	}
-	return doc.Token, nil
+	return renewAuthToken(configDir)
+}
+
+// SignedInEmail is the cached token's email claim, read without renewing or touching
+// the network, for showing who the menu belongs to. Empty when there is no token.
+func SignedInEmail(configDir string) string {
+	_, c, err := readTokenFile(configDir)
+	if err != nil {
+		return ""
+	}
+	return c.Email
 }
 
 // SubFromToken extracts the `sub` claim — the opaque auth.romaine.life user id
@@ -101,12 +116,15 @@ func EmailFromToken(token string) string {
 	return c.Email
 }
 
-// HandleValidate checks that a usable auth.romaine.life token is present and
-// posts the result to the title bar.
+// HandleValidate signs in (renewing from the device key if needed) and posts the
+// result to the title bar.
 func HandleValidate(s *core.State) {
-	if _, err := ReadAuthToken(s.ConfigDir); err != nil {
+	token, err := ReadAuthToken(s.ConfigDir)
+	if err != nil {
 		s.SetTitle(err.Error(), 2)
 		return
 	}
-	s.SetTitle("auth token OK", 1)
+	c, _ := parseTokenClaims(token)
+	left := time.Until(time.Unix(c.Exp, 0)).Round(time.Minute)
+	s.SetTitle(fmt.Sprintf("signed in as %s, token good for %s", c.Email, left), 1)
 }
