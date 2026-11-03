@@ -15,7 +15,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const APIBase = "https://fzt-frontend.romaine.life/fzt"
+const APIBase = "https://fzt-frontend.home.romaine.life/fzt"
 
 // StripMetadata removes keys starting with "_" from bookmark objects recursively.
 func StripMetadata(items []interface{}) []interface{} {

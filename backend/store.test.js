@@ -36,6 +36,10 @@ before(async () => {
 
 const open = name => Store.open({ repoUrl: remote, dir: path.join(root, name) });
 
+test('a deploy key is never offered without a pinned host key', async () => {
+  await assert.rejects(Store.open({ repoUrl: remote, dir: path.join(root, 'unpinned'), deployKey: 'private' }), /pinned SSH host key/);
+});
+
 test('reads a tree, and a missing one as null', async () => {
   const store = await open('read');
   assert.equal((await store.read('u-menu')).version, 12);

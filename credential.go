@@ -35,7 +35,7 @@ type tokenClaims struct {
 }
 
 // parseTokenClaims base64url-decodes the JWT payload (no signature check —
-// fzt-frontend.romaine.life is the verifier; the CLI only needs the sub/exp).
+// fzt-frontend.home.romaine.life is the verifier; the CLI only needs the sub/exp).
 func parseTokenClaims(token string) (tokenClaims, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) < 2 {

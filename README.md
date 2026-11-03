@@ -1,0 +1,66 @@
+# fzt-frontend
+
+Canonical menu and bookmark tree API, home-only at
+https://fzt-frontend.home.romaine.life. Work: [FORGEJO-6](https://openproject.romaine.life/wp/FORGEJO-6),
+service project [FZTF](https://openproject.romaine.life/projects/FZTF).
+The Go module keeps its github.com/romaine-life/fzt-frontend import path;
+Forgejo is the repository and release authority, and GitHub is a push mirror.
+
+The backend verifies auth.romaine.life JWTs against its JWKS, with the same
+issuer, role checks, Bearer header and auth_token cookie support as before.
+It does not issue credentials or have a browser login UI. /health is the
+unauthenticated operational probe; /fzt/tree/:id requires authentication.
+The CLI and homepage supply the existing identity provider's JWT.
+
+Every successful write commits trees/<id>.json to romaine-life/at on Forgejo
+through SSH on the home network. The write deploy key belongs to that repo
+only. backend/forgejo_known_hosts pins the host key obtained directly from
+the NAS's Forgejo container; keys learned from the network are never accepted.
+Optimistic versions, push-race retries and menu invariants remain enforced.
+
+## Deploy and publish
+
+After merging a green PR, the Forgejo CI builds and smoke-tests the real image,
+publishes it under forgejo.romaine.life/romaine-life/fzt-frontend with the next
+v0.1.N tag, and cuts the module release. The compose file pins the tested release.
+Only the application image is new; third-party runtime images use an older,
+explicit release. No image is published to GitHub, ghcr or Azure ACR.
+
+```powershell
+homesvc deploy .
+```
+
+homesvc.json owns the NAS deployment, home DNS zone, DSM reverse proxy,
+*.home.romaine.life certificate association, health/down-and-recovery alerts
+and homepage home-services link. Compose binds only 127.0.0.1:3020; DSM serves
+HTTPS at the home hostname. No public DNS record or router forward is needed.
+
+The main publishing job exchanges its Forgejo OIDC identity at OpenBao auth/forgejo
+for read access only to secret/services/fzt-frontend-build (registry-token).
+The token has write:package only. PRs and other repositories/refs/workflows cannot
+read it, and the job cannot read the SSH key. No registry token is held in Key Vault
+or a Forgejo Actions secret.
+
+The NAS's auth.romaine.life device reads secret/services/fzt-frontend from
+OpenBao. Provision store-deploy-key before deploying, using the released
+homesvc on the NAS (JSON object on stdin, never a credential in an argument):
+
+```text
+sudo /volume1/docker/homesvc/homesvc import-secrets fzt-frontend
+```
+
+The required existing secret fails closed if missing. homesvc renders it as
+credentials/store-deploy-key, uid 1001, mode 0400, and mounts it read-only.
+The clone and SSH working files live in /tmp and are rebuilt on every start.
+There is no durable service state beyond at and the key: nas-backup's existing
+Forgejo job backs up repositories, and its OpenBao job backs up the secret.
+A service-specific database backup is unnecessary. Deployment config is in git;
+DSM and DNS are covered by their existing backup jobs.
+
+## Development
+
+Use a local git store with STORE_REPO and STORE_DIR. For SSH, also set
+STORE_DEPLOY_KEY_FILE to an authorized key; the checked-in host pin is mandatory.
+Set PORT if needed. backend/server.js starts the service; npm test in backend
+runs the store tests. CI runs Go vet/tests, the no-HS256 guard, backend tests,
+and the container build/smoke gate on the home runners.

@@ -1,4 +1,4 @@
-// Backend for fzt-frontend.romaine.life. Hosts the unified tree API
+// Backend for fzt-frontend.home.romaine.life. Hosts the unified tree API
 // (/fzt/tree/:id) consumed by my-homepage web and fzt-automate CLI.
 // This API only verifies JWTs — it never issues them. All callers present
 // auth.romaine.life RS256 tokens, verified against the issuer's JWKS.
@@ -7,8 +7,7 @@ import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cors from 'cors';
-import { DefaultAzureCredential } from '@azure/identity';
-import { SecretClient } from '@azure/keyvault-secrets';
+import { readFile } from 'node:fs/promises';
 import { createFztFrontendRoutes } from './routes/index.js';
 import { createRequireAuth } from './auth.js';
 import { Store } from './store.js';
@@ -33,14 +32,16 @@ app.get('/health', (req, res) => {
 });
 
 async function start() {
-  // Trees live in the romaine-life/at repo; the backend pushes with a deploy key
-  // scoped to that one repo, kept in this app's Key Vault.
-  const vault = new SecretClient(process.env.KEY_VAULT_URL, new DefaultAzureCredential());
-  const { value: deployKey } = await vault.getSecret('at-store-deploy-key');
+  // homesvc reads this repo-scoped credential from OpenBao as the NAS device
+  // and mounts it read-only. JWT verification below is unchanged.
+  const deployKey = process.env.STORE_DEPLOY_KEY_FILE
+    ? await readFile(process.env.STORE_DEPLOY_KEY_FILE, 'utf8') : undefined;
+  const knownHosts = await readFile(new URL('./forgejo_known_hosts', import.meta.url), 'utf8');
   const store = await Store.open({
-    repoUrl: process.env.STORE_REPO || 'git@github.com:romaine-life/at.git',
+    repoUrl: process.env.STORE_REPO || 'ssh://git@forgejo.romaine.life:2222/romaine-life/at.git',
     dir: process.env.STORE_DIR || '/app/store',
     deployKey,
+    knownHosts,
   });
 
   const requireAuth = createRequireAuth();

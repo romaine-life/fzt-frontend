@@ -8,9 +8,6 @@ import path from 'node:path';
 
 const exec = promisify(execFile);
 
-// GitHub's published host key, pinned so the deploy key is only ever offered to GitHub.
-const GITHUB_HOST_KEY =
-  'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n';
 const FRESH_MS = 5000;
 const PUSH_ATTEMPTS = 3;
 const TREE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
@@ -100,18 +97,19 @@ export class Store {
   }
 
   // repoUrl is an SSH URL when deployKey is given, otherwise any URL git can push to.
-  static async open({ repoUrl, dir, deployKey }) {
+  static async open({ repoUrl, dir, deployKey, knownHosts }) {
     const env = { ...process.env, GIT_TERMINAL_PROMPT: '0' };
     if (deployKey) {
+      if (!knownHosts?.trim()) throw new Error('A pinned SSH host key is required with a deploy key');
       const sshDir = `${dir}.ssh`;
-      await mkdir(sshDir, { recursive: true });
+      await mkdir(sshDir, { recursive: true, mode: 0o700 });
       const keyFile = path.join(sshDir, 'deploy_key');
       const hostsFile = path.join(sshDir, 'known_hosts');
       await writeFile(keyFile, deployKey.endsWith('\n') ? deployKey : `${deployKey}\n`, { mode: 0o600 });
-      await writeFile(hostsFile, GITHUB_HOST_KEY);
+      await writeFile(hostsFile, knownHosts);
       // ssh parses this command line like a shell: quote the paths, and give it forward slashes.
       const q = p => `"${p.replace(/\\/g, '/')}"`;
-      env.GIT_SSH_COMMAND = `ssh -i ${q(keyFile)} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${q(hostsFile)}`;
+      env.GIT_SSH_COMMAND = `ssh -i ${q(keyFile)} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UpdateHostKeys=no -o GlobalKnownHostsFile=/dev/null -o UserKnownHostsFile=${q(hostsFile)}`;
     }
     await rm(dir, { recursive: true, force: true });
     await exec('git', ['clone', '-q', repoUrl, dir], { env });

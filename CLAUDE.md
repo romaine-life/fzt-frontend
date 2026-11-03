@@ -25,7 +25,7 @@ my-homepage           romaine-api.py            (any browser tab,
          v                  v                        v
        ┌────────────────────────────────────────────────┐
        │ fzt-frontend (this repo) at                    │
-       │ fzt-frontend.romaine.life                      │
+       │ fzt-frontend.home.romaine.life                      │
        │   • verifies JWTs (does NOT issue them)        │
        │   • CRUD over /fzt/tree/:id                    │
        │   • resolves {ref:"…"} pointers transparently  │
@@ -77,7 +77,7 @@ which tree ids to fetch and save: the opaque `sub` keys each caller's trees
 
 ## Store
 
-Trees live in the private repo [romaine-life/at](https://github.com/romaine-life/at),
+Trees live in the private repo [romaine-life/at](https://forgejo.romaine.life/romaine-life/at),
 which also holds the `at` menu's commands, as `trees/<id>.json`:
 `{ "version": N, "updatedAt": ISO8601, "tree": <array or object> }`.
 `backend/store.js` keeps a clone. A PUT is a commit pushed straight to that repo's
@@ -91,7 +91,7 @@ built-in, a program, or a command still in `commands/`), and every command in
 `commands/` keeps an entry. A PUT that breaks it returns 422 with the reasons.
 
 The backend pushes with a deploy key scoped to that one repo, read at startup from
-Key Vault `ng6-fzt-frontend` as `at-store-deploy-key`, with GitHub's host key pinned.
+OpenBao `secret/services/fzt-frontend` as `store-deploy-key`, rendered by homesvc, with Forgejo's host key pinned.
 
 The Cosmos container this replaced (`HomepageDB.fzt-frontend-data`) is archived,
 every version, in the store at `archive/cosmos-export.jsonl.gz`.
@@ -127,7 +127,7 @@ Or do it by hand:
 ```sh
 TOKEN=$(romaine-api.py mint-token --identity nelson)
 curl -H "Authorization: Bearer $TOKEN" \
-     https://fzt-frontend.romaine.life/fzt/tree/nelson-bookmarks
+     https://fzt-frontend.home.romaine.life/fzt/tree/nelson-bookmarks
 ```
 
 ## Local dev
@@ -136,9 +136,8 @@ curl -H "Authorization: Bearer $TOKEN" \
 cd backend
 npm install
 PORT=3000 node server.js
-# server reads the store's deploy key from Key Vault via DefaultAzureCredential —
-# `az login` as a principal with Key Vault Secrets User on ng6-fzt-frontend. Token
-# verification needs no secret: it fetches the auth.romaine.life JWKS over HTTP.
+# STORE_REPO points to a local git store, or set STORE_DEPLOY_KEY_FILE for SSH.
+# Token verification fetches auth.romaine.life JWKS over HTTP.
 ```
 
 Frontend dev (Go-WASM fzt terminal): see `fzt-terminal/CLAUDE.md` for

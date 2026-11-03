@@ -9,6 +9,7 @@ concurrency:
 jobs:
   test:
     runs-on: windows-latest
+    timeout-minutes: 15
     defaults:
       run:
         shell: pwsh
@@ -31,18 +32,53 @@ jobs:
   image:
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    enable-openid-connect: true
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - run: docker build --network host -t fzt-frontend:check .
-      - name: Release module
+      - name: Build application image
+        run: docker build --network host -t "fzt-frontend:check-$GITHUB_SHA" .
+      - name: Smoke-test the real image and authentication gate
+        run: |
+          name="fzt-smoke-$GITHUB_RUN_ID"
+          trap 'docker rm -f "$name" >/dev/null 2>&1 || true' EXIT
+          docker run -d --network host --name "$name" \
+            -e PORT=33099 -e STORE_REPO=/tmp/seed -e STORE_DIR=/tmp/store \
+            --entrypoint sh "fzt-frontend:check-$GITHUB_SHA" -c '
+              set -eu
+              git init -q -b main /tmp/seed
+              echo fixture > /tmp/seed/README
+              git -C /tmp/seed add README
+              git -C /tmp/seed -c user.name=fixture -c user.email=fixture@example.com commit -qm fixture
+              exec node backend/server.js'
+          ready=false
+          for n in $(seq 1 45); do
+            if docker exec "$name" node -e 'fetch("http://127.0.0.1:33099/health").then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))'; then ready=true; break; fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then docker logs "$name"; exit 1; fi
+          docker exec "$name" node -e 'Promise.all([fetch("http://127.0.0.1:33099/fzt/tree/fixture"),fetch("http://127.0.0.1:33099/fzt/tree/fixture",{headers:{Authorization:"Bearer invalid"}})]).then(rs=>process.exit(rs.every(r=>r.status===401)?0:1))'
+      - name: Publish image and module release on Forgejo
         if: github.event_name == 'push'
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git fetch --tags origin
           last=$(git tag -l 'v0.1.*' --sort=-v:refname | head -1)
           tag="v0.1.$(( ${last#v0.1.} + 1 ))"
-          body=$(jq -n --arg tag "$tag" --arg sha "$GITHUB_SHA" '{tag_name:$tag,target_commitish:$sha,name:$tag,body:"Built and tested on Forgejo."}')
+          image="forgejo.romaine.life/romaine-life/fzt-frontend:$tag"
+          export DOCKER_CONFIG="$RUNNER_TEMP/fzt-registry"
+          trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+          set -euo pipefail
+          jwt=$(printf 'header = "Authorization: bearer %s"\n' "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" | curl -sS --fail-with-body -K - "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=openbao" | jq -er .value)
+          echo "::add-mask::$jwt"
+          bao=$(printf '%s' "$jwt" | jq -Rs '{role:"fzt-frontend-publish",jwt:.}' | curl -sS --fail-with-body -H 'Content-Type: application/json' --data-binary @- https://bao.home.romaine.life/v1/auth/forgejo/login | jq -er .auth.client_token)
+          echo "::add-mask::$bao"
+          registry=$(printf 'header = "X-Vault-Token: %s"\n' "$bao" | curl -sS --fail-with-body -K - https://bao.home.romaine.life/v1/secret/data/services/fzt-frontend-build | jq -er '.data.data["registry-token"]')
+          echo "::add-mask::$registry"
+          printf '%s' "$registry" | docker login forgejo.romaine.life --username nelson --password-stdin
+          docker tag "fzt-frontend:check-$GITHUB_SHA" "$image"
+          docker push "$image"
+          body=$(jq -n --arg tag "$tag" --arg sha "$GITHUB_SHA" --arg image "$image" '{tag_name:$tag,target_commitish:$sha,name:$tag,body:("Built and smoke-tested on Forgejo. Container: `"+$image+"`.")}')
           printf 'header = "Authorization: token %s"\n' "$TOKEN" | curl -sS --fail-with-body -K - -H 'Content-Type: application/json' -X POST -d "$body" "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/releases"
