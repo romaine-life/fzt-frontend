@@ -84,7 +84,7 @@ existing state. From a merged checkout with the operator's existing az login:
 ```powershell
 cd infra
 tofu init
-tofu plan -parallelism=4 -out=retire.tfplan
+tofu plan -parallelism=4 '-out=retire.tfplan'
 tofu apply -parallelism=4 retire.tfplan
 ```
 

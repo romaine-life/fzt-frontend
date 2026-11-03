@@ -22,7 +22,11 @@ terraform {
 }
 
 provider "azurerm" {
-  features {}
+  features {
+    key_vault {
+      purge_soft_delete_on_destroy = false
+    }
+  }
   subscription_id                 = "aee0cbd2-8074-4001-b610-0f8edb4eaa3c"
   resource_provider_registrations = "none"
   use_cli                         = true
