@@ -70,3 +70,25 @@ only). homesvc.json's registry block gives Docker an isolated root-only config f
 this service; it is not mounted into the application and does not change any other
 service's registry login. Use a homesvc release with registry support.
 
+
+## Retiring AKS (FORGEJO-6)
+
+After the home URL passed a real fzt-automate sync and a write/revert to Forgejo at,
+this change removes the Kubernetes chart. infra-bootstrap removes its Argo Application
+and Azure CI identity while preserving the GitHub push-mirror repository. The old
+GitHub deploy key on at and old ACR image repository are retired after that proof.
+
+The runtime Azure stack is kept as an empty retirement configuration against its
+existing state. From a merged checkout with the operator's existing az login:
+
+```powershell
+cd infra
+tofu init
+tofu plan -parallelism=4 -out=retire.tfplan
+tofu apply -parallelism=4 retire.tfplan
+```
+
+The reviewed plan must destroy only the old fzt-frontend UAMI, its federated
+credential, Key Vault and Key Vault role assignment, and create nothing. Shared
+Azure resources and the git-backed trees are outside this state. The empty state
+remains an audit record. Normal Key Vault soft-delete retention applies.

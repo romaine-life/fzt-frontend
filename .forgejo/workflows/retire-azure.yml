@@ -1,0 +1,22 @@
+name: Retired Azure configuration
+on:
+  pull_request:
+    paths: [infra/**, .forgejo/workflows/retire-azure.yml]
+  push:
+    branches: [main]
+    paths: [infra/**, .forgejo/workflows/retire-azure.yml]
+jobs:
+  validate:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: https://github.com/opentofu/setup-opentofu@v1
+        with:
+          tofu_version: '1.12.0'
+          tofu_wrapper: false
+      - run: tofu -chdir=infra fmt -check
+      - run: tofu -chdir=infra init -backend=false
+      - run: tofu -chdir=infra validate
