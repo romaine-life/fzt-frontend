@@ -29,16 +29,22 @@ export function createRequireAuth() {
     try {
       const { payload } = await jwtVerify(token, authJwks, {
         issuer: AUTH_ISSUER,
+        audience: AUTH_ISSUER,
+        requiredClaims: ['sub', 'email', 'role', 'iat', 'exp'],
       });
-      const role = typeof payload.role === 'string' ? payload.role : 'user';
+      const role = payload.role;
       if (!AUTH_ROLES.has(role)) {
         return res.status(403).json({ error: 'Forbidden' });
+      }
+      if (payload.device && payload.purpose !== 'machine') {
+        return res.status(401).json({ error: 'Legacy device-as-human token; renew as the machine' });
       }
       req.user = {
         sub: payload.sub,
         email: payload.email,
         name: payload.name,
         role,
+        purpose: payload.purpose,
         apps: payload.apps || {},
       };
       return next();

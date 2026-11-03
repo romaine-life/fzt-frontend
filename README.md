@@ -6,8 +6,11 @@ service project [FZTF](https://openproject.romaine.life/projects/FZTF).
 The Go module keeps its github.com/romaine-life/fzt-frontend import path;
 Forgejo is the repository and release authority, and GitHub is a push mirror.
 
-The backend verifies auth.romaine.life JWTs against its JWKS, with the same
-issuer, role checks, Bearer header and auth_token cookie support as before.
+The backend verifies auth.romaine.life JWTs against its JWKS, requiring the
+first-party issuer, audience and identity claims. Machine tokens identify the
+machine and may write only its explicit owner's menu and bookmarks; writes
+record the machine's name and email as the Git author. Legacy device tokens
+which impersonate a person are rejected. Browser sign-in remains separate.
 It does not issue credentials or have a browser login UI. /health is the
 unauthenticated operational probe; /fzt/tree/:id requires authentication.
 The CLI and homepage supply the existing identity provider's JWT.

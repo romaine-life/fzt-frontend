@@ -31,6 +31,12 @@ export function createFztFrontendRoutes({ requireAuth, store }) {
 
   const MAX_REF_DEPTH = 10;
 
+  function canWriteTree(actor, id) {
+    if (actor?.purpose !== 'machine') return true;
+    const owner = actor.apps?.fzt?.owner_sub;
+    return typeof owner === 'string' && (id === `${owner}-menu` || id === `${owner}-bookmarks`);
+  }
+
   async function resolveRefs(items, visited = new Set()) {
     if (!Array.isArray(items)) return items;
     const out = [];
@@ -124,12 +130,13 @@ export function createFztFrontendRoutes({ requireAuth, store }) {
   router.put('/tree/:id', requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
+      if (!canWriteTree(req.user, id)) return res.status(403).json({ error: 'Machine has no write grant for this tree' });
       const { tree, baseVersion } = req.body;
       if (tree === undefined || tree === null) {
         return res.status(400).json({ error: 'Request body must contain a tree field' });
       }
 
-      const author = req.user?.email || req.user?.name || req.user?.sub || 'unknown';
+      const author = { name: req.user.name || req.user.email, email: req.user.email, sub: req.user.sub };
       const saved = await store.write(id, stripRefs(tree), baseVersion, author);
       res.json({
         id,

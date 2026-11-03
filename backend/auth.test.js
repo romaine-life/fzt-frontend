@@ -27,7 +27,7 @@ after(async () => {
 
 async function token(role = 'user', issuer = 'https://auth.romaine.life', expiration = '5m') {
   return new SignJWT({ role, email: 'fixture@example.com' }).setProtectedHeader({ alg: 'RS256', kid: 'test' })
-    .setIssuer(issuer).setSubject('fixture-user').setIssuedAt().setExpirationTime(expiration).sign(keys.privateKey);
+    .setAudience('https://auth.romaine.life').setIssuer(issuer).setSubject('fixture-user').setIssuedAt().setExpirationTime(expiration).sign(keys.privateKey);
 }
 
 test('identity-provider RS256 tokens and the existing cookie fallback work', async () => {
@@ -52,4 +52,15 @@ test('missing, expired, tampered and wrong-issuer tokens remain rejected', async
 
 test('a signed role outside the existing role set remains forbidden', async () => {
   assert.equal((await fetch(base, { headers: { Authorization: `Bearer ${await token('outsider')}` } })).status, 403);
+});
+
+test('federation tokens and legacy device-as-human credentials cannot bypass machine permissions', async () => {
+  for (const payload of [
+    { sub: 'device:owner/mac', aud: 'openbao' },
+    { sub: 'owner', role: 'admin', email: 'owner@example.com', device: 'mac' },
+  ]) {
+    const jwt = await new SignJWT(payload).setProtectedHeader({ alg: 'RS256', kid: 'test' })
+      .setIssuer('https://auth.romaine.life').setAudience(payload.aud || 'https://auth.romaine.life').setIssuedAt().setExpirationTime('5m').sign(keys.privateKey);
+    assert.equal((await fetch(base, { headers: { Authorization: `Bearer ${jwt}` } })).status, 401);
+  }
 });

@@ -34,6 +34,7 @@ before(async () => {
   await exec('git', ['clone', '-q', '--bare', seed, remote]);
 });
 
+const actor = { name: 'Machine: fixture', email: 'fixture@service.machine.romaine.life', sub: 'device:owner/fixture' };
 const open = name => Store.open({ repoUrl: remote, dir: path.join(root, name) });
 
 test('a deploy key is never offered without a pinned host key', async () => {
@@ -48,15 +49,17 @@ test('reads a tree, and a missing one as null', async () => {
 
 test('a write with the current version commits the next one to main', async () => {
   const store = await open('write');
-  const saved = await store.write('u-bookmarks', [{ name: 'a', url: 'https://a' }], 3, 'tester');
+  const saved = await store.write('u-bookmarks', [{ name: 'a', url: 'https://a' }], 3, actor);
   assert.equal(saved.version, 4);
+  const history = await exec('git', ['-C', store.dir, 'log', '-1', '--format=%an <%ae>']);
+  assert.equal(history.stdout.trim(), 'Machine: fixture <fixture@service.machine.romaine.life>');
   const other = await open('write-check');
   assert.equal((await other.read('u-bookmarks')).version, 4);
 });
 
 test('a stale baseVersion is a conflict carrying the current tree', async () => {
   const store = await open('stale');
-  await assert.rejects(store.write('u-bookmarks', [], 1, 'tester'), err => {
+  await assert.rejects(store.write('u-bookmarks', [], 1, actor), err => {
     assert.ok(err instanceof ConflictError);
     assert.ok(err.current.version >= 4);
     return true;
@@ -71,14 +74,14 @@ test('a menu may run built-ins and programs, which have no script in the store',
     { name: 'windows', action: 'folder:windows' },
     { name: 'tuner', action: "uv run 'D:\\repos\\guitar-looper-cli\\guitar-tuner\\tuner.py'" },
     { name: 'fnlock' }];
-  assert.equal((await store.write('u-menu', tree, current.version, 'tester')).version, current.version + 1);
+  assert.equal((await store.write('u-menu', tree, current.version, actor)).version, current.version + 1);
 });
 
 test('an action whose quote is never closed is refused', async () => {
   const store = await open('unclosed');
   const current = await store.read('u-menu');
   const tree = [...current.tree, { name: 'broken', action: "launch 'Google Chrome" }];
-  await assert.rejects(store.write('u-menu', tree, current.version, 'tester'), err => {
+  await assert.rejects(store.write('u-menu', tree, current.version, actor), err => {
     assert.ok(err instanceof InvalidTreeError);
     assert.match(err.message, /\/broken: a quote in its action is never closed/);
     return true;
@@ -96,7 +99,7 @@ test('a menu may not drop the last entry for a command', async () => {
   const store = await open('drop');
   const current = await store.read('u-menu');
   const tree = current.tree.filter(n => n.name !== 'lights');
-  await assert.rejects(store.write('u-menu', tree, current.version, 'tester'), err => {
+  await assert.rejects(store.write('u-menu', tree, current.version, actor), err => {
     assert.ok(err instanceof InvalidTreeError);
     assert.match(err.message, /'lightson' would have no menu entry/);
     return true;
@@ -107,7 +110,7 @@ test('moving entries between folders is allowed', async () => {
   const store = await open('move');
   const current = await store.read('u-menu');
   const tree = [{ name: 'misc', children: [{ name: 'lightson' }, current.tree[1]] }, current.tree[2]];
-  assert.equal((await store.write('u-menu', tree, current.version, 'tester')).version, current.version + 1);
+  assert.equal((await store.write('u-menu', tree, current.version, actor)).version, current.version + 1);
 });
 
 test('a writer that lost the push race retries from the new main', async () => {

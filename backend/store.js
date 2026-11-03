@@ -194,7 +194,7 @@ export class Store {
         await mkdir(path.join(this.dir, 'trees'), { recursive: true });
         await writeFile(this.treeFile(id), `${JSON.stringify(doc, null, 2)}\n`);
         await this.git('add', `trees/${id}.json`);
-        await this.git('commit', '-q', '-m', `Update ${id} to v${doc.version}`, '-m', `Saved through fzt-frontend by ${author}.`);
+        await this.git('commit', '-q', '--author', `${author.name} <${author.email}>`, '-m', `Update ${id} to v${doc.version}`, '-m', `Saved through fzt-frontend by ${author.sub}.`);
         try {
           await this.git('push', '-q', 'origin', 'HEAD:main');
           this.fetchedAt = Date.now();

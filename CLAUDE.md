@@ -69,11 +69,12 @@ path was removed in the auth.romaine.life migration — there is no fallback
 (see `scripts/check-no-hs256.mjs`, the CI guard against reintroduction).
 
 Bearer header preferred; cookie `auth_token=` accepted as a fallback.
-Identity claims (`sub`, `email`, `name`, `role`) are baked into the token
-payload — there is **no per-tree ACL**. Any authenticated caller can read or
-write any tree id. Identity-based scoping is enforced client-side by choosing
-which tree ids to fetch and save: the opaque `sub` keys each caller's trees
-(`<sub>-menu`, `<sub>-bookmarks`).
+Identity claims (`sub`, `email`, `name`, `role`) are baked into the token.
+Machine tokens have `purpose=machine` and an explicit `apps.fzt.owner_sub` grant;
+the server permits machine writes only to that owner's `<sub>-menu` and
+`<sub>-bookmarks`. Existing authenticated reads and human write permissions
+remain unchanged. Git writes record the caller's name and email, so a machine
+appears as its own author. Device tokens impersonating a person are rejected.
 
 ## Store
 
