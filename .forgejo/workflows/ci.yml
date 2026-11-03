@@ -1,0 +1,48 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  test:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: go vet ./...
+      - run: go test ./...
+      - run: node scripts/check-no-hs256.mjs
+      - run: npm ci
+        working-directory: backend
+      - run: npm test
+        working-directory: backend
+  image:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: docker build --network host -t fzt-frontend:check .
+      - name: Release module
+        if: github.event_name == 'push'
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git fetch --tags origin
+          last=$(git tag -l 'v0.1.*' --sort=-v:refname | head -1)
+          tag="v0.1.$(( ${last#v0.1.} + 1 ))"
+          body=$(jq -n --arg tag "$tag" --arg sha "$GITHUB_SHA" '{tag_name:$tag,target_commitish:$sha,name:$tag,body:"Built and tested on Forgejo."}')
+          printf 'header = "Authorization: token %s"\n' "$TOKEN" | curl -sS --fail-with-body -K - -H 'Content-Type: application/json' -X POST -d "$body" "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/releases"

@@ -1,19 +1,18 @@
-FROM node:20-alpine
+FROM node:20.19.5-alpine3.22
 
 # The tree store is a git clone of romaine-life/at, reached over SSH.
 RUN apk add --no-cache git openssh-client
 
 WORKDIR /app
 
-COPY backend/package*.json backend/
-RUN cd backend && npm install --omit=dev
-
-COPY backend/ backend/
-
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001 && \
-    chown -R nodejs:nodejs /app
+    chown nodejs:nodejs /app
 USER nodejs
+
+COPY --chown=nodejs:nodejs backend/package*.json backend/
+RUN cd backend && npm ci --omit=dev
+COPY --chown=nodejs:nodejs backend/ backend/
 
 EXPOSE 3000
 
