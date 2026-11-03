@@ -8,8 +8,8 @@ ecosystem reads from and writes to.
 
 Agent pods are not expected to have Docker. Do not report missing local Docker
 as a blocker. Run available repo checks first, then use PR CI as the normal
-container build gate: `.github/workflows/docker-build-check.yml` performs a
-throwaway Docker build with `push: false`. If image-packaging feedback is
+container build gate: `.forgejo/workflows/ci.yml` performs a
+throwaway Docker build with a throwaway image build. If image-packaging feedback is
 needed before a PR is ready, manually dispatch that workflow with `git_ref`.
 Release/deploy workflows are the only path that publishes images.
 
