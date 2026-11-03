@@ -25,7 +25,9 @@ Optimistic versions, push-race retries and menu invariants remain enforced.
 
 After merging a green PR, the Forgejo CI builds and smoke-tests the real image,
 publishes it under forgejo.romaine.life/romaine-life/fzt-frontend with the next
-v0.1.N tag, and cuts the module release. The compose file pins the tested release.
+v0.1.N tag, and cuts the module release. The compose file pins the tested release
+through a checked deployment PR. Deployment and documentation changes run the
+checks without publishing another application release.
 Only the application image is new; third-party runtime images use an older,
 explicit release. No image is published to GitHub, ghcr or Azure ACR.
 

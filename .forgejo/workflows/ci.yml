@@ -38,6 +38,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Check release inputs
+        id: inputs
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -eu
+          if [ -z "$BEFORE" ] || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          elif git diff --quiet "$BEFORE" HEAD -- Dockerfile .dockerignore backend '*.go' go.mod go.sum; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          fi
       - name: Build application image
         run: docker build --network host -t "fzt-frontend:check-$GITHUB_SHA" .
       - name: Smoke-test the real image and authentication gate
@@ -61,7 +74,7 @@ jobs:
           if [ "$ready" != true ]; then docker logs "$name"; exit 1; fi
           docker exec "$name" node -e 'Promise.all([fetch("http://127.0.0.1:33099/fzt/tree/fixture"),fetch("http://127.0.0.1:33099/fzt/tree/fixture",{headers:{Authorization:"Bearer invalid"}})]).then(rs=>process.exit(rs.every(r=>r.status===401)?0:1))'
       - name: Publish image and module release on Forgejo
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && steps.inputs.outputs.changed == 'true'
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

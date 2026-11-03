@@ -1,7 +1,7 @@
 services:
   fzt-frontend:
     # The release is built and tested by .forgejo/workflows/ci.yml; no mutable tag.
-    image: forgejo.romaine.life/romaine-life/fzt-frontend:v0.1.45
+    image: forgejo.romaine.life/romaine-life/fzt-frontend:v0.1.49
     container_name: fzt-frontend
     environment:
       PORT: "3000"
