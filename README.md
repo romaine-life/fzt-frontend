@@ -64,3 +64,9 @@ STORE_DEPLOY_KEY_FILE to an authorized key; the checked-in host pin is mandatory
 Set PORT if needed. backend/server.js starts the service; npm test in backend
 runs the store tests. CI runs Go vet/tests, the no-HS256 guard, backend tests,
 and the container build/smoke gate on the home runners.
+
+Private image pulls use the registry-read-token existing OpenBao secret (read:package
+only). homesvc.json's registry block gives Docker an isolated root-only config for
+this service; it is not mounted into the application and does not change any other
+service's registry login. Use a homesvc release with registry support.
+

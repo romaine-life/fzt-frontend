@@ -26,6 +26,10 @@
     {
       "existing": true,
       "name": "store-deploy-key"
+    },
+    {
+      "name": "registry-read-token",
+      "existing": true
     }
   ],
   "health": {
@@ -40,5 +44,10 @@
   },
   "files": [
     "nas/docker-compose.yml"
-  ]
+  ],
+  "registry": {
+    "username": "nelson",
+    "server": "forgejo.romaine.life",
+    "passwordSecret": "registry-read-token"
+  }
 }
