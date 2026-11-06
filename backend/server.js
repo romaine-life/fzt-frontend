@@ -19,8 +19,8 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 // Which kind of token each request used, so the machines' move to home tokens reads from the log.
-morgan.token('caller', req => req.caller || '-');
-app.use(morgan(`${morgan.combined} caller=":caller"`));
+morgan.token('token-kind', req => req.caller || '-');
+app.use(morgan(`${morgan.combined} caller=":token-kind"`));
 
 app.use((req, res, next) => {
   if (serverReady || req.path === '/health') return next();
