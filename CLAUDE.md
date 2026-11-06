@@ -60,21 +60,28 @@ state attached so callers can merge and retry.
 
 ## Auth model
 
-This backend **only verifies** — it never issues tokens. All callers (the
-my-homepage browser SPA and the fzt-automate CLI) present RS256 JWTs issued by
-`auth.romaine.life`, verified against `https://auth.romaine.life/api/auth/jwks`
-with issuer `https://auth.romaine.life`. Tokens whose `role` is outside
-`{admin, user, service}` are rejected (403). The legacy HS256 shared-secret
+This backend **only verifies** — it never issues tokens. Browsers (my-homepage)
+present RS256 JWTs issued by `auth.romaine.life`, verified against
+`https://auth.romaine.life/api/auth/jwks` with issuer `https://auth.romaine.life`.
+Tokens whose `role` is outside `{admin, user, service}` are rejected (403).
+Home machines present ES256 tokens OpenBao signs for role `fzt-frontend` (audience
+`fzt-frontend`, issuer `https://bao.home.romaine.life/v1/identity/oidc`, from
+`romaine-auth home-token --role fzt-frontend`), checked against OpenBao's published keys
+alone, so a machine request has no cloud in its path. `auth.romaine.life` machine tokens
+still work until every machine has moved (ROMAINE-54). The legacy HS256 shared-secret
 path was removed in the auth.romaine.life migration — there is no fallback
 (see `scripts/check-no-hs256.mjs`, the CI guard against reintroduction).
 
 Bearer header preferred; cookie `auth_token=` accepted as a fallback.
-Identity claims (`sub`, `email`, `name`, `role`) are baked into the token.
-Machine tokens have `purpose=machine` and an explicit `apps.fzt.owner_sub` grant;
-the server permits machine writes only to that owner's `<sub>-menu` and
-`<sub>-bookmarks`. Existing authenticated reads and human write permissions
-remain unchanged. Git writes record the caller's name and email, so a machine
-appears as its own author. Device tokens impersonating a person are rejected.
+Identity claims (`sub`, `email`, `name`, `role`) are baked into a human token.
+A home token carries `device` and an explicit `apps.fzt.owner_sub` grant; the token's
+`sub` is an OpenBao entity id and means nothing here. The server permits machine writes
+only to that owner's `<sub>-menu` and `<sub>-bookmarks`, and an empty owner grants
+nothing. Existing authenticated reads and human write permissions remain unchanged.
+Git writes record the caller's name and email, so a machine appears as its own author
+(`Machine: <device>`, `<device>@machine.home.romaine.life`). Device tokens impersonating
+a person are rejected. The access log's `caller=` names each request's token kind:
+`home device=…`, `auth machine device=…`, `auth human sub=…` or `auth service sub=…`.
 
 ## Store
 

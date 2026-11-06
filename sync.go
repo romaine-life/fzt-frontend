@@ -142,10 +142,10 @@ func MenuTreeID(sub string) string {
 }
 
 // SyncMenu fetches the caller's menu tree from the API and writes the cache
-// file as YAML. The tree id is keyed by the auth.romaine.life token's `sub`.
+// file as YAML. The tree id comes from the token's owner grant.
 // Returns (item count, version number, error).
 func SyncMenu(configDir string) (int, int, error) {
-	token, err := ReadAuthToken(configDir)
+	token, err := ReadAuthToken()
 	if err != nil {
 		return 0, 0, err
 	}
@@ -176,9 +176,9 @@ func SyncMenu(configDir string) (int, int, error) {
 }
 
 // SaveMenu PUTs the caller's menu tree and updates the local cache. The tree
-// id is keyed by the auth.romaine.life token's `sub`. Returns the new version.
+// id comes from the token's owner grant. Returns the new version.
 func SaveMenu(configDir string, menu []interface{}, baseVersion int) (int, error) {
-	token, err := ReadAuthToken(configDir)
+	token, err := ReadAuthToken()
 	if err != nil {
 		return 0, err
 	}
@@ -246,7 +246,7 @@ func yamlEntries(items []interface{}) []core.YAMLEntry {
 // cache. A failure is returned, not read as "not stale", so the menu can say it
 // couldn't check: an *AuthError when signing in failed.
 func CheckMenuStale(configDir string) (bool, error) {
-	token, err := ReadAuthToken(configDir)
+	token, err := ReadAuthToken()
 	if err != nil {
 		return false, err
 	}

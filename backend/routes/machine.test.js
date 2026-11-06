@@ -21,3 +21,20 @@ test('a machine writes only its granted personal trees and keeps its own audit i
     assert.deepEqual(writes[0].author, { name: actor.name, email: actor.email, sub: actor.sub });
   } finally { await new Promise(resolve => server.close(resolve)); }
 });
+
+test('an empty or missing owner never grants a machine write', async () => {
+  for (const apps of [{ fzt: { owner_sub: '' } }, { fzt: {} }, {}, undefined]) {
+    const actor = { sub: 'device:mac', name: 'Machine: mac', email: 'mac@machine.home.romaine.life', purpose: 'machine', apps };
+    const store = { read: async () => null, write: async () => { throw new Error('wrote'); } };
+    const app = express(); app.use(express.json());
+    app.use('/fzt', createFztFrontendRoutes({ store, requireAuth: (req, res, next) => { req.user = actor; next(); } }));
+    const server = app.listen(0, '127.0.0.1');
+    await new Promise(resolve => server.once('listening', resolve));
+    try {
+      for (const tree of ['-menu', '-bookmarks', 'undefined-menu']) {
+        const response = await fetch(`http://127.0.0.1:${server.address().port}/fzt/tree/${tree}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tree: [], baseVersion: 0 }) });
+        assert.equal(response.status, 403);
+      }
+    } finally { await new Promise(resolve => server.close(resolve)); }
+  }
+});

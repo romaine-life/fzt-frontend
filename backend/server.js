@@ -1,7 +1,6 @@
 // Backend for fzt-frontend.home.romaine.life. Hosts the unified tree API
 // (/fzt/tree/:id) consumed by my-homepage web and fzt-automate CLI.
-// This API only verifies JWTs — it never issues them. All callers present
-// auth.romaine.life RS256 tokens, verified against the issuer's JWKS.
+// This API only verifies JWTs — it never issues them (see auth.js).
 import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
@@ -19,7 +18,9 @@ let serverReady = false;
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
-app.use(morgan('combined'));
+// Which kind of token each request used, so the machines' move to home tokens reads from the log.
+morgan.token('caller', req => req.caller || '-');
+app.use(morgan(`${morgan.combined} caller=":caller"`));
 
 app.use((req, res, next) => {
   if (serverReady || req.path === '/health') return next();

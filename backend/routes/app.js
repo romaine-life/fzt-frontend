@@ -34,7 +34,7 @@ export function createFztFrontendRoutes({ requireAuth, store }) {
   function canWriteTree(actor, id) {
     if (actor?.purpose !== 'machine') return true;
     const owner = actor.apps?.fzt?.owner_sub;
-    return typeof owner === 'string' && (id === `${owner}-menu` || id === `${owner}-bookmarks`);
+    return typeof owner === 'string' && owner !== '' && (id === `${owner}-menu` || id === `${owner}-bookmarks`);
   }
 
   async function resolveRefs(items, visited = new Set()) {

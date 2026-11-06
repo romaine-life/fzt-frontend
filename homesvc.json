@@ -39,7 +39,7 @@
   },
   "homepage": {
     "name": "Tree store",
-    "description": "Menu and bookmark API on the NAS; auth.romaine.life JWTs are required for trees.",
+    "description": "Menu and bookmark API on the NAS; a sign-in token is required for trees.",
     "url": "https://fzt-frontend.home.romaine.life/health"
   },
   "files": [

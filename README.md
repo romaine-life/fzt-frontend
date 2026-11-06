@@ -6,14 +6,17 @@ service project [FZTF](https://openproject.romaine.life/projects/FZTF).
 The Go module keeps its github.com/romaine-life/fzt-frontend import path;
 Forgejo is the repository and release authority, and GitHub is a push mirror.
 
-The backend verifies auth.romaine.life JWTs against its JWKS, requiring the
-first-party issuer, audience and identity claims. Machine tokens identify the
-machine and may write only its explicit owner's menu and bookmarks; writes
-record the machine's name and email as the Git author. Legacy device tokens
-which impersonate a person are rejected. Browser sign-in remains separate.
+The backend verifies two kinds of token. Browsers present auth.romaine.life JWTs,
+checked against its JWKS for the first-party issuer, audience and identity claims.
+Home machines present OpenBao tokens for role fzt-frontend, checked against OpenBao's
+published keys alone, so no cloud is in their path; auth.romaine.life machine tokens
+still work until every machine has moved (ROMAINE-54). A machine may write only its
+explicit owner's menu and bookmarks, and its writes record it as the Git author.
+Legacy device tokens which impersonate a person are rejected. The access log's
+`caller=` names each request's token kind.
 It does not issue credentials or have a browser login UI. /health is the
 unauthenticated operational probe; /fzt/tree/:id requires authentication.
-The CLI and homepage supply the existing identity provider's JWT.
+The homepage supplies auth.romaine.life's JWT and the CLI an OpenBao home token.
 
 Every successful write commits trees/<id>.json to romaine-life/at on Forgejo
 through SSH on the home network. The write deploy key belongs to that repo
