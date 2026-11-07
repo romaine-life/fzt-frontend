@@ -9,11 +9,10 @@ Forgejo is the repository and release authority, and GitHub is a push mirror.
 The backend verifies two kinds of token. Browsers present auth.romaine.life JWTs,
 checked against its JWKS for the first-party issuer, audience and identity claims.
 Home machines present OpenBao tokens for role fzt-frontend, checked against OpenBao's
-published keys alone, so no cloud is in their path; auth.romaine.life machine tokens
-still work until every machine has moved (ROMAINE-54). A machine may write only its
+published keys alone, so no cloud is in their path. A machine may write only its
 explicit owner's menu and bookmarks, and its writes record it as the Git author.
-Legacy device tokens which impersonate a person are rejected. The access log's
-`caller=` names each request's token kind.
+auth.romaine.life signs in people only: its machine, service and device tokens are
+refused. The access log's `caller=` names each request's token kind.
 It does not issue credentials or have a browser login UI. /health is the
 unauthenticated operational probe; /fzt/tree/:id requires authentication.
 The homepage supplies auth.romaine.life's JWT and the CLI an OpenBao home token.
@@ -49,7 +48,7 @@ The token has write:package only. PRs and other repositories/refs/workflows cann
 read it, and the job cannot read the SSH key. No registry token is held in Key Vault
 or a Forgejo Actions secret.
 
-The NAS's auth.romaine.life device reads secret/services/fzt-frontend from
+The NAS's own device key reads secret/services/fzt-frontend from
 OpenBao. Provision store-deploy-key before deploying, using the released
 homesvc on the NAS (JSON object on stdin, never a credential in an argument):
 

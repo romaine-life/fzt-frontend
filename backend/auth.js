@@ -2,7 +2,7 @@ import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'jose';
 
 const AUTH_ISSUER = process.env.AUTH_ISSUER || 'https://auth.romaine.life';
 const AUTH_JWKS_URL = process.env.AUTH_JWKS_URL || `${AUTH_ISSUER}/api/auth/jwks`;
-const AUTH_ROLES = new Set(['admin', 'user', 'service']);
+const AUTH_ROLES = new Set(['admin', 'user']);
 const HOME_ISSUER = 'https://bao.home.romaine.life/v1/identity/oidc';
 const HOME_JWKS_URL = process.env.HOME_JWKS_URL || `${HOME_ISSUER}/.well-known/keys`;
 const HOME_AUDIENCE = 'fzt-frontend';
@@ -15,9 +15,8 @@ function issuerOf(token) {
   }
 }
 
-function authCaller(payload) {
-  if (payload.purpose === 'machine') return `auth machine device=${payload.device}`;
-  return `auth ${payload.role === 'service' ? 'service' : 'human'} sub=${payload.sub}`;
+function notAPerson(payload) {
+  return payload.role === 'service' || payload.purpose !== undefined || payload.device !== undefined;
 }
 
 // fzt-frontend only verifies JWTs — it never issues them. Browsers present
@@ -82,22 +81,16 @@ export function createRequireAuth() {
         audience: AUTH_ISSUER,
         requiredClaims: ['sub', 'email', 'role', 'iat', 'exp'],
       });
+      if (notAPerson(payload)) {
+        req.caller = `auth refused device=${payload.device ?? '-'} sub=${payload.sub}`;
+        return res.status(401).json({ error: 'auth.romaine.life signs in people here; a machine needs an OpenBao home token' });
+      }
       const role = payload.role;
       if (!AUTH_ROLES.has(role)) {
         return res.status(403).json({ error: 'Forbidden' });
       }
-      if (payload.device && payload.purpose !== 'machine') {
-        return res.status(401).json({ error: 'Legacy device-as-human token; renew as the machine' });
-      }
-      req.user = {
-        sub: payload.sub,
-        email: payload.email,
-        name: payload.name,
-        role,
-        purpose: payload.purpose,
-        apps: payload.apps || {},
-      };
-      req.caller = authCaller(payload);
+      req.user = { sub: payload.sub, email: payload.email, name: payload.name, role };
+      req.caller = `auth human sub=${payload.sub}`;
       return next();
     } catch {
       return res.status(401).json({ error: 'Invalid or expired token' });

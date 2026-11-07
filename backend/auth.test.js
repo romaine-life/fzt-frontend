@@ -6,7 +6,7 @@ import { generateKeyPair, exportJWK, SignJWT } from 'jose';
 
 const HOME_ISSUER = 'https://bao.home.romaine.life/v1/identity/oidc';
 
-let keys, homeKeys, jwks, homeJwks, authKeyReads = 0, api, base;
+let keys, homeKeys, jwks, homeJwks, authKeyReads = 0, api, base, lastCaller;
 before(async () => {
   keys = await generateKeyPair('RS256');
   homeKeys = await generateKeyPair('ES256');
@@ -27,7 +27,12 @@ before(async () => {
   process.env.HOME_JWKS_URL = `http://127.0.0.1:${homeJwks.address().port}/keys`;
   const { createRequireAuth } = await import('./auth.js');
   const app = express();
-  app.get('/tree', createRequireAuth(), (req, res) => res.json({ ...req.user, caller: req.caller }));
+  const recordCaller = (req, res, next) => {
+    const json = res.json.bind(res);
+    res.json = (body) => { lastCaller = req.caller; return json(body); };
+    next();
+  };
+  app.get('/tree', recordCaller, createRequireAuth(), (req, res) => res.json({ ...req.user, caller: req.caller }));
   api = app.listen(0, '127.0.0.1');
   await new Promise(resolve => api.once('listening', resolve));
   base = `http://127.0.0.1:${api.address().port}/tree`;
@@ -42,7 +47,7 @@ async function token(role = 'user', issuer = 'https://auth.romaine.life', expira
 }
 
 test('identity-provider RS256 tokens and the existing cookie fallback work', async () => {
-  for (const role of ['admin', 'user', 'service']) {
+  for (const role of ['admin', 'user']) {
     const res = await fetch(base, { headers: { Authorization: `Bearer ${await token(role)}` } });
     assert.equal(res.status, 200);
     assert.equal((await res.json()).sub, 'fixture-user');
@@ -65,15 +70,34 @@ test('a signed role outside the existing role set remains forbidden', async () =
   assert.equal((await fetch(base, { headers: { Authorization: `Bearer ${await token('outsider')}` } })).status, 403);
 });
 
-test('federation tokens and legacy device-as-human credentials cannot bypass machine permissions', async () => {
-  for (const payload of [
-    { sub: 'device:owner/mac', aud: 'openbao' },
-    { sub: 'owner', role: 'admin', email: 'owner@example.com', device: 'mac' },
+test('federation tokens are refused', async () => {
+  const jwt = await new SignJWT({ sub: 'device:owner/mac' }).setProtectedHeader({ alg: 'RS256', kid: 'test' })
+    .setIssuer('https://auth.romaine.life').setAudience('openbao').setIssuedAt().setExpirationTime('5m').sign(keys.privateKey);
+  assert.equal((await fetch(base, { headers: { Authorization: `Bearer ${jwt}` } })).status, 401);
+});
+
+test('auth.romaine.life signs in only people: machine, service and device-as-human tokens are refused', async () => {
+  for (const [sub, payload] of [
+    ['device:owner/mac', { role: 'service', purpose: 'machine', device: 'mac', apps: { fzt: { owner_sub: 'owner' } } }],
+    ['svc:tank:100', { role: 'service' }],
+    ['owner', { role: 'admin', device: 'mac' }],
+    ['owner', { role: 'admin', purpose: 'machine' }],
+    ['owner', { role: 'user', purpose: 'bot' }],
   ]) {
-    const jwt = await new SignJWT(payload).setProtectedHeader({ alg: 'RS256', kid: 'test' })
-      .setIssuer('https://auth.romaine.life').setAudience(payload.aud || 'https://auth.romaine.life').setIssuedAt().setExpirationTime('5m').sign(keys.privateKey);
-    assert.equal((await fetch(base, { headers: { Authorization: `Bearer ${jwt}` } })).status, 401);
+    const jwt = await new SignJWT({ email: 'x@example.com', ...payload }).setProtectedHeader({ alg: 'RS256', kid: 'test' })
+      .setIssuer('https://auth.romaine.life').setAudience('https://auth.romaine.life').setSubject(sub).setIssuedAt().setExpirationTime('5m').sign(keys.privateKey);
+    const res = await fetch(base, { headers: { Authorization: `Bearer ${jwt}` } });
+    assert.equal(res.status, 401);
+    assert.match((await res.json()).error, /OpenBao home token/);
+    assert.equal(lastCaller, `auth refused device=${payload.device ?? '-'} sub=${sub}`);
   }
+});
+
+test('a person gets no machine fields, whatever else the token claims', async () => {
+  const jwt = await new SignJWT({ email: 'x@example.com', role: 'user', apps: { fzt: { owner_sub: 'other' } } }).setProtectedHeader({ alg: 'RS256', kid: 'test' })
+    .setIssuer('https://auth.romaine.life').setAudience('https://auth.romaine.life').setSubject('person').setIssuedAt().setExpirationTime('5m').sign(keys.privateKey);
+  const user = await (await fetch(base, { headers: { Authorization: `Bearer ${jwt}` } })).json();
+  assert.deepEqual(user, { sub: 'person', email: 'x@example.com', role: 'user', caller: 'auth human sub=person' });
 });
 
 function homeToken({ claims = { device: 'mac', apps: { fzt: { owner_sub: 'owner' } } }, issuer = HOME_ISSUER, audience = 'fzt-frontend', expiration = '5m' } = {}) {
@@ -125,19 +149,5 @@ test('wrong audience, issuer, expiry, missing device and alg none are refused', 
     'not-a-jwt',
   ]) {
     assert.equal((await call(jwt)).status, 401);
-  }
-});
-
-test('the caller names the token kind for the log', async () => {
-  const signed = (payload) => new SignJWT({ email: 'x@example.com', ...payload }).setProtectedHeader({ alg: 'RS256', kid: 'test' })
-    .setIssuer('https://auth.romaine.life').setAudience('https://auth.romaine.life').setSubject('fixture-user').setIssuedAt().setExpirationTime('5m').sign(keys.privateKey);
-  for (const [payload, caller] of [
-    [{ role: 'admin' }, 'auth human sub=fixture-user'],
-    [{ role: 'service', purpose: 'machine', device: 'mac' }, 'auth machine device=mac'],
-    [{ role: 'service' }, 'auth service sub=fixture-user'],
-  ]) {
-    const res = await call(await signed(payload));
-    assert.equal(res.status, 200);
-    assert.equal((await res.json()).caller, caller);
   }
 });

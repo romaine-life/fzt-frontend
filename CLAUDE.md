@@ -63,12 +63,12 @@ state attached so callers can merge and retry.
 This backend **only verifies** — it never issues tokens. Browsers (my-homepage)
 present RS256 JWTs issued by `auth.romaine.life`, verified against
 `https://auth.romaine.life/api/auth/jwks` with issuer `https://auth.romaine.life`.
-Tokens whose `role` is outside `{admin, user, service}` are rejected (403).
+It signs in people only: a token with `role` outside `{admin, user}` is rejected (403),
+and a `service`, `purpose` or `device` token is refused (401).
 Home machines present ES256 tokens OpenBao signs for role `fzt-frontend` (audience
 `fzt-frontend`, issuer `https://bao.home.romaine.life/v1/identity/oidc`, from
 `romaine-auth home-token --role fzt-frontend`), checked against OpenBao's published keys
-alone, so a machine request has no cloud in its path. `auth.romaine.life` machine tokens
-still work until every machine has moved (ROMAINE-54). The legacy HS256 shared-secret
+alone, so a machine request has no cloud in its path. The legacy HS256 shared-secret
 path was removed in the auth.romaine.life migration — there is no fallback
 (see `scripts/check-no-hs256.mjs`, the CI guard against reintroduction).
 
@@ -79,9 +79,9 @@ A home token carries `device` and an explicit `apps.fzt.owner_sub` grant; the to
 only to that owner's `<sub>-menu` and `<sub>-bookmarks`, and an empty owner grants
 nothing. Existing authenticated reads and human write permissions remain unchanged.
 Git writes record the caller's name and email, so a machine appears as its own author
-(`Machine: <device>`, `<device>@machine.home.romaine.life`). Device tokens impersonating
-a person are rejected. The access log's `caller=` names each request's token kind:
-`home device=…`, `auth machine device=…`, `auth human sub=…` or `auth service sub=…`.
+(`Machine: <device>`, `<device>@machine.home.romaine.life`). The access log's `caller=`
+names each request's token kind: `home device=…`, `auth human sub=…`, or
+`auth refused device=… sub=…` for a token this section refuses.
 
 ## Store
 
@@ -145,7 +145,7 @@ cd backend
 npm install
 PORT=3000 node server.js
 # STORE_REPO points to a local git store, or set STORE_DEPLOY_KEY_FILE for SSH.
-# Token verification fetches auth.romaine.life JWKS over HTTP.
+# Token verification fetches each issuer's keys over HTTP, on the first token it signs.
 ```
 
 Frontend dev (Go-WASM fzt terminal): see `fzt-terminal/CLAUDE.md` for
