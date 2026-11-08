@@ -40,13 +40,14 @@ jobs:
           fetch-depth: 0
       - name: Check release inputs
         id: inputs
-        env:
-          BEFORE: ${{ github.event.before }}
+        # Against the last release, not the previous push, so a release that failed is
+        # made by the next push to main.
         run: |
           set -eu
-          if [ -z "$BEFORE" ] || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+          last=$(git tag -l 'v0.1.*' --sort=-v:refname | head -1)
+          if [ -z "$last" ]; then
             echo 'changed=true' >> "$GITHUB_OUTPUT"
-          elif git diff --quiet "$BEFORE" HEAD -- Dockerfile .dockerignore backend '*.go' go.mod go.sum; then
+          elif git diff --quiet "$last" HEAD -- Dockerfile .dockerignore backend '*.go' go.mod go.sum; then
             echo 'changed=false' >> "$GITHUB_OUTPUT"
           else
             echo 'changed=true' >> "$GITHUB_OUTPUT"
@@ -84,11 +85,24 @@ jobs:
           export DOCKER_CONFIG="$RUNNER_TEMP/fzt-registry"
           trap 'rm -rf "$DOCKER_CONFIG"' EXIT
           set -euo pipefail
-          jwt=$(printf 'header = "Authorization: bearer %s"\n' "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" | curl -sS --fail-with-body -K - "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=openbao" | jq -er .value)
+          # A refusal is printed (never an answer, which holds a token), and OpenBao's with
+          # the claims it checks, so a refused sign-in says why.
+          jwt=
+          call() {
+            out=$(curl -sS -w '\n%{http_code}' "$@")
+            code=${out##*$'\n'}; body=${out%$'\n'*}
+            if [ "$code" != 200 ]; then
+              echo "Answered $code:$(printf '%s' "$body" | jq -c '.errors // .message // .' 2>/dev/null || printf '%s' "$body")" >&2
+              [ -z "$jwt" ] || printf '%s' "$jwt" | cut -d. -f2 | tr '_-' '/+' | jq -R '@base64d | fromjson | {sub, repository, ref, workflow, event_name, aud}' >&2 || true
+              return 1
+            fi
+            printf '%s' "$body"
+          }
+          jwt=$(printf 'header = "Authorization: bearer %s"\n' "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" | call -K - "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=openbao" | jq -er .value)
           echo "::add-mask::$jwt"
-          bao=$(printf '%s' "$jwt" | jq -Rs '{role:"fzt-frontend-publish",jwt:.}' | curl -sS --fail-with-body -H 'Content-Type: application/json' --data-binary @- https://bao.home.romaine.life/v1/auth/forgejo/login | jq -er .auth.client_token)
+          bao=$(printf '%s' "$jwt" | jq -Rs '{role:"fzt-frontend-publish",jwt:.}' | call -H 'Content-Type: application/json' --data-binary @- https://bao.home.romaine.life/v1/auth/forgejo/login | jq -er .auth.client_token)
           echo "::add-mask::$bao"
-          registry=$(printf 'header = "X-Vault-Token: %s"\n' "$bao" | curl -sS --fail-with-body -K - https://bao.home.romaine.life/v1/secret/data/services/fzt-frontend-build | jq -er '.data.data["registry-token"]')
+          registry=$(printf 'header = "X-Vault-Token: %s"\n' "$bao" | call -K - https://bao.home.romaine.life/v1/secret/data/services/fzt-frontend-build | jq -er '.data.data["registry-token"]')
           echo "::add-mask::$registry"
           printf '%s' "$registry" | docker login forgejo.romaine.life --username nelson --password-stdin
           docker tag "fzt-frontend:check-$GITHUB_SHA" "$image"
