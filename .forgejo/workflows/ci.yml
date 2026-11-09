@@ -109,3 +109,14 @@ jobs:
           docker push "$image"
           body=$(jq -n --arg tag "$tag" --arg sha "$GITHUB_SHA" --arg image "$image" '{tag_name:$tag,target_commitish:$sha,name:$tag,body:("Built and smoke-tested on Forgejo. Container: `"+$image+"`.")}')
           printf 'header = "Authorization: token %s"\n' "$TOKEN" | curl -sS --fail-with-body -K - -H 'Content-Type: application/json' -X POST -d "$body" "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/releases"
+  manifests:
+    runs-on: linux
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the home cluster's manifests
+        run: |
+          set -euo pipefail
+          curl -fsSL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.8.3/kustomize_v5.8.3_linux_amd64.tar.gz | tar xz -C /usr/local/bin kustomize
+          curl -fsSL https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz | tar xz -C /usr/local/bin kubeconform
+          kustomize build k8s | kubeconform -strict -summary -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'

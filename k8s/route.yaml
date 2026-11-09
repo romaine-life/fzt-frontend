@@ -1,0 +1,22 @@
+# The annotations are its down alert: homesvc health on the NAS checks the URL each minute.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: fzt-frontend
+  annotations:
+    home.romaine.life/health-url: https://fzt-frontend.home.romaine.life/health
+    home.romaine.life/health-title: Tree store
+    home.romaine.life/health-down: Menu sync, menu edits and homepage bookmarks cannot reach the tree store.
+spec:
+  parentRefs:
+    - name: home
+      namespace: envoy-gateway-system
+      sectionName: https
+  hostnames:
+    - fzt-frontend.home.romaine.life
+  rules:
+    - backendRefs:
+        - name: fzt-frontend
+          port: 80
+      timeouts:
+        request: 300s

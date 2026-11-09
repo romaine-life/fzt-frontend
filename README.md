@@ -64,6 +64,14 @@ Forgejo job backs up repositories, and its OpenBao job backs up the secret.
 A service-specific database backup is unnecessary. Deployment config is in git;
 DSM and DNS are covered by their existing backup jobs.
 
+## The home cluster
+
+`k8s/` runs the same release on the home cluster (nelsong6/home-cluster, HOMEINFRA-1),
+synced by its Argo CD from main: the deploy key and registry token come from the same
+OpenBao path through External Secrets, and the route's annotations are its down alert.
+It takes over fzt-frontend.home.romaine.life when home DNS points the name at the
+cluster, after which the NAS deployment above is removed.
+
 ## Development
 
 Use a local git store with STORE_REPO and STORE_DIR. For SSH, also set

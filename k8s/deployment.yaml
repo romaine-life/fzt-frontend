@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fzt-frontend
+spec:
+  replicas: 1
+  # The new pod is ready before the old one stops, so a release never takes it down.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: fzt-frontend
+  template:
+    metadata:
+      labels:
+        app: fzt-frontend
+    spec:
+      imagePullSecrets:
+        - name: forgejo-registry
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: fzt-frontend
+          # The release is built and tested by .forgejo/workflows/ci.yml; no mutable tag.
+          image: forgejo.romaine.life/romaine-life/fzt-frontend:v0.1.53
+          env:
+            - name: PORT
+              value: "3000"
+            - name: STORE_REPO
+              value: ssh://git@forgejo.romaine.life:2222/romaine-life/at.git
+            - name: STORE_DIR
+              value: /tmp/at-store
+            - name: STORE_DEPLOY_KEY_FILE
+              value: /run/secrets/store-deploy-key/store-deploy-key
+          ports:
+            - name: http
+              containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 30
+            failureThreshold: 3
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: store-deploy-key
+              mountPath: /run/secrets/store-deploy-key
+              readOnly: true
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        # The backend copies the key into /tmp with its own permissions before ssh uses it.
+        - name: store-deploy-key
+          secret:
+            secretName: store-deploy-key
+            defaultMode: 0440

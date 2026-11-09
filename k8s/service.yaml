@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: fzt-frontend
+spec:
+  selector:
+    app: fzt-frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

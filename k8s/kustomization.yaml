@@ -1,0 +1,9 @@
+# fzt-frontend on the home cluster (nelsong6/home-cluster), synced by its Argo CD.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: fzt-frontend
+resources:
+  - secrets.yaml
+  - deployment.yaml
+  - service.yaml
+  - route.yaml
