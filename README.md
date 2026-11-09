@@ -27,50 +27,35 @@ Optimistic versions, push-race retries and menu invariants remain enforced.
 
 After merging a green PR, the Forgejo CI builds and smoke-tests the real image,
 publishes it under forgejo.romaine.life/romaine-life/fzt-frontend with the next
-v0.1.N tag, and cuts the module release. The compose file pins the tested release
-through a checked deployment PR. Deployment and documentation changes run the
-checks without publishing another application release.
-Only the application image is new; third-party runtime images use an older,
-explicit release. No image is published to GitHub, ghcr or Azure ACR.
+v0.1.N tag, and cuts the module release. `k8s/deployment.yaml` pins the tested
+release; a PR that moves the pin deploys it. Deployment and documentation changes run
+the checks without publishing another application release. No image is published to
+GitHub, ghcr or Azure ACR.
 
-```powershell
-homesvc deploy .
-```
+It runs on the home cluster (nelsong6/home-cluster, HOMEINFRA-1), whose Argo CD syncs
+`k8s/` from main. A new release starts its pod and waits for it to answer `/health`
+before stopping the old one. The home name, fzt-frontend.home.romaine.life, points at
+the cluster in the NAS's DNS Server, and the cluster's gateway serves it with the
+`*.home.romaine.life` certificate. No public DNS record or router forward is needed.
 
-homesvc.json owns the NAS deployment, home DNS zone, DSM reverse proxy,
-*.home.romaine.life certificate association, health/down-and-recovery alerts
-and homepage home-services link. Compose binds only 127.0.0.1:3020; DSM serves
-HTTPS at the home hostname. No public DNS record or router forward is needed.
+The deploy key and the registry's read-only token are OpenBao's
+`secret/services/fzt-frontend` (`store-deploy-key`, `registry-read-token`), which
+External Secrets copies into the namespace. To replace the deploy key, write the new one
+there as the NAS (`sudo /volume1/docker/homesvc/homesvc import-secrets fzt-frontend`, a
+JSON object on stdin, never a credential in an argument); the pod picks it up on its
+next start. The clone and SSH working files live in /tmp and are rebuilt on every start.
+There is no durable service state beyond at and the key: nas-backup's Forgejo job backs
+up repositories, and its OpenBao job backs up the secret.
+
+The route's annotations are its down alert: the NAS's `homesvc health` checks
+/health each minute and alerts through ntfy. Its logs are in the pile:
+`log-search <words> --pc cluster --app fzt-frontend`.
 
 The main publishing job exchanges its Forgejo OIDC identity at OpenBao auth/forgejo
 for read access only to secret/services/fzt-frontend-build (registry-token).
 The token has write:package only. PRs and other repositories/refs/workflows cannot
 read it, and the job cannot read the SSH key. No registry token is held in Key Vault
 or a Forgejo Actions secret.
-
-The NAS's own device key reads secret/services/fzt-frontend from
-OpenBao. Provision store-deploy-key before deploying, using the released
-homesvc on the NAS (JSON object on stdin, never a credential in an argument):
-
-```text
-sudo /volume1/docker/homesvc/homesvc import-secrets fzt-frontend
-```
-
-The required existing secret fails closed if missing. homesvc renders it as
-credentials/store-deploy-key, uid 1001, mode 0400, and mounts it read-only.
-The clone and SSH working files live in /tmp and are rebuilt on every start.
-There is no durable service state beyond at and the key: nas-backup's existing
-Forgejo job backs up repositories, and its OpenBao job backs up the secret.
-A service-specific database backup is unnecessary. Deployment config is in git;
-DSM and DNS are covered by their existing backup jobs.
-
-## The home cluster
-
-`k8s/` runs the same release on the home cluster (nelsong6/home-cluster, HOMEINFRA-1),
-synced by its Argo CD from main: the deploy key and registry token come from the same
-OpenBao path through External Secrets, and the route's annotations are its down alert.
-It takes over fzt-frontend.home.romaine.life when home DNS points the name at the
-cluster, after which the NAS deployment above is removed.
 
 ## Development
 
@@ -80,10 +65,6 @@ Set PORT if needed. backend/server.js starts the service; npm test in backend
 runs the store tests. CI runs Go vet/tests, the no-HS256 guard, backend tests,
 and the container build/smoke gate on the home runners.
 
-Private image pulls use the registry-read-token existing OpenBao secret (read:package
-only). homesvc.json's registry block gives Docker an isolated root-only config for
-this service; it is not mounted into the application and does not change any other
-service's registry login. Use a homesvc release with registry support.
 
 
 ## Retiring AKS (FORGEJO-6)

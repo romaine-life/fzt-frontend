@@ -99,7 +99,7 @@ built-in, a program, or a command still in `commands/`), and every command in
 `commands/` keeps an entry. A PUT that breaks it returns 422 with the reasons.
 
 The backend pushes with a deploy key scoped to that one repo, read at startup from
-OpenBao `secret/services/fzt-frontend` as `store-deploy-key`, rendered by homesvc, with Forgejo's host key pinned.
+OpenBao `secret/services/fzt-frontend` as `store-deploy-key`, copied in by the home cluster's External Secrets, with Forgejo's host key pinned.
 
 The Cosmos container this replaced (`HomepageDB.fzt-frontend-data`) is archived,
 every version, in the store at `archive/cosmos-export.jsonl.gz`.
