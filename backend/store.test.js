@@ -88,6 +88,35 @@ test('an action whose quote is never closed is refused', async () => {
   });
 });
 
+test('an action naming a home-sync install path is refused, pointing at tool:', async () => {
+  for (const action of [
+    "'${ProgramFiles}\\at-home\\recorder\\current\\recorder.exe'",
+    '"C:\\Program Files\\at-home\\gvoice-tui\\current\\gvoice-tui.exe" --x',
+    'C:/Program Files/at-home/fzt-picker/v0.1.9/fzt-files.exe',
+    '%ProgramFiles%\\at-home\\spt\\current\\spotify_player.exe',
+  ]) {
+    const store = await open('install-path');
+    const current = await store.read('u-menu');
+    const tree = [...current.tree, { name: 'pinned', action }];
+    await assert.rejects(store.write('u-menu', tree, current.version, actor), err => {
+      assert.ok(err instanceof InvalidTreeError, action);
+      assert.match(err.message, /\/pinned: .*home-sync install path.*tool:<name>/, action);
+      return true;
+    });
+  }
+});
+
+test('tool: actions and other paths are allowed', async () => {
+  const store = await open('tool-actions');
+  const current = await store.read('u-menu');
+  const tree = [...current.tree,
+    { name: 'recorder', action: 'tool:recorder' },
+    { name: 'files', action: 'tool:fzt-picker/fzt-files.exe' },
+    { name: 'spt', action: 'system:spotify tool:spt -c tool-config:spt' },
+    { name: 'other', action: '"C:\\Program Files\\Other\\app.exe"' }];
+  assert.equal((await store.write('u-menu', tree, current.version, actor)).version, current.version + 1);
+});
+
 test('splitArgs reads an action as fzt-automate does', () => {
   assert.deepEqual(splitArgs("launch 'Slay the Spire 2' steam://rungameid/2868840"), ['launch', 'Slay the Spire 2', 'steam://rungameid/2868840']);
   assert.deepEqual(splitArgs("launch 'Assassin''s Creed' x"), ['launch', "Assassin's Creed", 'x']);

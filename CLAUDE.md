@@ -95,8 +95,13 @@ new main, so a stale `baseVersion` still returns 409. History is the repo's hist
 
 Menu trees (`*-menu`) must keep the store's invariant: every entry's action reads
 as an argument list (fzt-automate runs it with no shell, FZT-71: an fzt-automate
-built-in, a program, or a command still in `commands/`), and every command in
-`commands/` keeps an entry. A PUT that breaks it returns 422 with the reasons.
+built-in, a program, or a command still in `commands/`), every command in
+`commands/` keeps an entry, and no action names a home-sync install path
+(`Program Files\at-home\...`): a tool is reached as `tool:<name>`, which
+fzt-automate resolves from home-sync's list, so state.json stays the one place a
+tool's program is named (HOMECFG-213). A PUT that breaks it returns 422 with the
+reasons. The menu is edited only this way, by Claude sessions: the at menu has no
+edit or save commands.
 
 The backend pushes with a deploy key scoped to that one repo, read at startup from
 OpenBao `secret/services/fzt-frontend` as `store-deploy-key`, copied in by the home cluster's External Secrets, with Forgejo's host key pinned.

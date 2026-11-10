@@ -77,6 +77,11 @@ export function splitArgs(line) {
   return args;
 }
 
+// A tool home-sync installs lives under Program Files\at-home\<name>. A menu action
+// reaches it as tool:<name>, which fzt-automate resolves from home-sync's list, so an
+// action naming the folder itself is refused (HOMECFG-213).
+const INSTALL_PATH = /(program ?files|\$\{programfiles\}|%programfiles%)[\\/]+at-home[\\/]/i;
+
 function* menuActions(tree, where = '') {
   if (!Array.isArray(tree)) return;
   for (const node of tree) {
@@ -171,6 +176,9 @@ export class Store {
       const args = splitArgs(line);
       if (args === null) problems.push(`${where}: a quote in its action is never closed`);
       else if (args.length) used.add(args[0]);
+      if (INSTALL_PATH.test(line)) {
+        problems.push(`${where}: its action names a home-sync install path; use tool:<name>, or tool:<name>/<file>, so home-sync's list stays the one place a tool's program is named`);
+      }
     }
     for (const cmd of have) {
       if (!used.has(cmd)) problems.push(`'${cmd}' would have no menu entry`);
