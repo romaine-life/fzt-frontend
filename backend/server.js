@@ -33,8 +33,7 @@ app.get('/health', (req, res) => {
 });
 
 async function start() {
-  // homesvc reads this repo-scoped credential from OpenBao as the NAS device
-  // and mounts it read-only. JWT verification below is unchanged.
+  // The repo-scoped deploy key, mounted read-only from OpenBao (k8s/secrets.yaml).
   const deployKey = process.env.STORE_DEPLOY_KEY_FILE
     ? await readFile(process.env.STORE_DEPLOY_KEY_FILE, 'utf8') : undefined;
   const knownHosts = await readFile(new URL('./forgejo_known_hosts', import.meta.url), 'utf8');
