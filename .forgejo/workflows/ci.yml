@@ -38,6 +38,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # The image pin is pushed with PIPELINE_DISPATCH_TOKEN, as auth's is.
+          persist-credentials: false
       - name: Check release inputs
         id: inputs
         # Against the last release, not the previous push, so a release that failed is
@@ -109,6 +111,34 @@ jobs:
           docker push "$image"
           body=$(jq -n --arg tag "$tag" --arg sha "$GITHUB_SHA" --arg image "$image" '{tag_name:$tag,target_commitish:$sha,name:$tag,body:("Built and smoke-tested on Forgejo. Container: `"+$image+"`.")}')
           printf 'header = "Authorization: token %s"\n' "$TOKEN" | curl -sS --fail-with-body -K - -H 'Content-Type: application/json' -X POST -d "$body" "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/releases"
+          echo "IMAGE_TAG=$tag" >> "$GITHUB_ENV"
+      # The home cluster runs what k8s/ pins, so a release reaches it through this PR,
+      # merged once its checks pass (auth's pattern, romaine-life/auth).
+      - name: Propose the image pin
+        if: github.event_name == 'push' && steps.inputs.outputs.changed == 'true'
+        env:
+          TOKEN: ${{ secrets.PIPELINE_DISPATCH_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$TOKEN"
+          api="$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY"
+          branch="HOMEINFRA-1-image-$IMAGE_TAG"
+          git checkout -b "$branch"
+          sed -i -E "s|^(          image: forgejo.romaine.life/romaine-life/fzt-frontend:).*$|\1$IMAGE_TAG|" k8s/deployment.yaml
+          git config user.name forgejo-actions
+          git config user.email forgejo-actions@noreply.romaine.life
+          git add k8s/deployment.yaml
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: pin fzt-frontend image $IMAGE_TAG"
+          # Keep the credential out of git's process arguments.
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraHeader
+          export GIT_CONFIG_VALUE_0="Authorization: Basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)"
+          git push origin "HEAD:refs/heads/$branch"
+          unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+          body=$(jq -n --arg head "$branch" --arg tag "$IMAGE_TAG" '{base:"main",head:$head,title:("chore: pin fzt-frontend image "+$tag),body:"Validated image pin. https://openproject.romaine.life/wp/HOMEINFRA-1"}')
+          pr=$(printf 'Authorization: token %s\n' "$TOKEN" | curl --fail-with-body -sS -X POST --header @- -H 'Content-Type: application/json' -d "$body" "$api/pulls")
+          number=$(echo "$pr" | jq -r .number)
+          printf 'Authorization: token %s\n' "$TOKEN" | curl --fail-with-body -sS -X POST --header @- -H 'Content-Type: application/json' -d '{"Do":"squash","merge_when_checks_succeed":true,"delete_branch_after_merge":true}' "$api/pulls/$number/merge"
   manifests:
     runs-on: linux
     steps:

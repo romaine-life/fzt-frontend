@@ -28,7 +28,9 @@ Optimistic versions, push-race retries and menu invariants remain enforced.
 After merging a green PR, the Forgejo CI builds and smoke-tests the real image,
 publishes it under forgejo.romaine.life/romaine-life/fzt-frontend with the next
 v0.1.N tag, and cuts the module release. `k8s/deployment.yaml` pins the tested
-release; a PR that moves the pin deploys it. Deployment and documentation changes run
+release. The same run opens a PR moving the pin to the new tag and has Forgejo merge it
+once its checks pass, so a release deploys itself (auth's pattern); it pushes with the
+`PIPELINE_DISPATCH_TOKEN` org secret. Deployment and documentation changes run
 the checks without publishing another application release. No image is published to
 GitHub, ghcr or Azure ACR.
 
