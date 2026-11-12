@@ -40,6 +40,7 @@ jobs:
           fetch-depth: 0
           # The image pin is pushed with PIPELINE_DISPATCH_TOKEN, as auth's is.
           persist-credentials: false
+      - uses: romaine-life/pipeline-templates/actions/check-fetches@main
       - name: Check release inputs
         id: inputs
         # Against the last release, not the previous push, so a release that failed is
@@ -146,7 +147,7 @@ jobs:
       - name: Check the home cluster's manifests
         run: |
           set -euo pipefail
-          curl -fsSL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.8.3/kustomize_v5.8.3_linux_amd64.tar.gz | tar xz -C /usr/local/bin kustomize
-          curl -fsSL https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz | tar xz -C /usr/local/bin kubeconform
-          kustomize build k8s | kubeconform -strict -summary -schema-location default \
-            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+          curl -fsSL https://artifacts.home.romaine.life/general/github/kubernetes-sigs/kustomize/releases/download/kustomize/v5.8.3/kustomize_v5.8.3_linux_amd64.tar.gz | tar xz -C /usr/local/bin kustomize
+          curl -fsSL https://artifacts.home.romaine.life/general/github/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz | tar xz -C /usr/local/bin kubeconform
+          kustomize build k8s | kubeconform -strict -summary -schema-location 'https://artifacts.home.romaine.life/general/githubusercontent/yannh/kubernetes-json-schema/master/{{.NormalizedKubernetesVersion}}-standalone{{.StrictSuffix}}/{{.ResourceKind}}{{.KindSuffix}}.json' \
+            -schema-location 'https://artifacts.home.romaine.life/general/githubusercontent/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
