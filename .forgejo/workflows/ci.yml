@@ -108,7 +108,7 @@ jobs:
           if [ "$ready" != true ]; then docker logs "$name"; exit 1; fi
           docker exec "$name" node -e 'Promise.all([fetch("http://127.0.0.1:33099/fzt/tree/fixture"),fetch("http://127.0.0.1:33099/fzt/tree/fixture",{headers:{Authorization:"Bearer invalid"}})]).then(rs=>process.exit(rs.every(r=>r.status===401)?0:1))'
       - name: Publish image and module release on Forgejo
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.inputs.outputs.changed == 'true'
+        if: github.event_name == 'push' && steps.inputs.outputs.changed == 'true'
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -148,7 +148,7 @@ jobs:
       # The home cluster runs what k8s/ pins, so a release reaches it through this PR,
       # merged once its checks pass (auth's pattern, romaine-life/auth).
       - name: Propose the image pin
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.inputs.outputs.changed == 'true'
+        if: github.event_name == 'push' && steps.inputs.outputs.changed == 'true'
         env:
           TOKEN: ${{ secrets.PIPELINE_DISPATCH_TOKEN }}
         run: |
