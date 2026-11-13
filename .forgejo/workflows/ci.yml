@@ -109,10 +109,12 @@ jobs:
           echo "::add-mask::$registry"
           printf '%s' "$registry" | docker login forgejo.romaine.life --username nelson --password-stdin
           docker tag "fzt-frontend:check-$GITHUB_SHA" "$image"
-          docker push "$image"
+          # The pin names the digest the registry holds for the tag.
+          digest=$(docker push "$image" | tee /dev/stderr | sed -n -E 's/^.*digest: (sha256:[0-9a-f]{64}) .*$/\1/p')
+          test -n "$digest"
           body=$(jq -n --arg tag "$tag" --arg sha "$GITHUB_SHA" --arg image "$image" '{tag_name:$tag,target_commitish:$sha,name:$tag,body:("Built and smoke-tested on Forgejo. Container: `"+$image+"`.")}')
           printf 'header = "Authorization: token %s"\n' "$TOKEN" | curl -sS --fail-with-body -K - -H 'Content-Type: application/json' -X POST -d "$body" "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/releases"
-          echo "IMAGE_TAG=$tag" >> "$GITHUB_ENV"
+          printf '%s\n' "IMAGE_TAG=$tag" "IMAGE_PIN=$tag@$digest" >> "$GITHUB_ENV"
       # The home cluster runs what k8s/ pins, so a release reaches it through this PR,
       # merged once its checks pass (auth's pattern, romaine-life/auth).
       - name: Propose the image pin
@@ -125,7 +127,7 @@ jobs:
           api="$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY"
           branch="HOMEINFRA-1-image-$IMAGE_TAG"
           git checkout -b "$branch"
-          sed -i -E "s|^(          image: forgejo.romaine.life/romaine-life/fzt-frontend:).*$|\1$IMAGE_TAG|" k8s/deployment.yaml
+          sed -i -E "s|^(          image: forgejo.romaine.life/romaine-life/fzt-frontend:).*$|\1$IMAGE_PIN|" k8s/deployment.yaml
           git config user.name forgejo-actions
           git config user.email forgejo-actions@noreply.romaine.life
           git add k8s/deployment.yaml
@@ -149,5 +151,10 @@ jobs:
           set -euo pipefail
           curl -fsSL https://artifacts.home.romaine.life/general/github/kubernetes-sigs/kustomize/releases/download/kustomize/v5.8.3/kustomize_v5.8.3_linux_amd64.tar.gz | tar xz -C /usr/local/bin kustomize
           curl -fsSL https://artifacts.home.romaine.life/general/github/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz | tar xz -C /usr/local/bin kubeconform
-          kustomize build k8s | kubeconform -strict -summary -schema-location 'https://artifacts.home.romaine.life/general/githubusercontent/yannh/kubernetes-json-schema/master/{{.NormalizedKubernetesVersion}}-standalone{{.StrictSuffix}}/{{.ResourceKind}}{{.KindSuffix}}.json' \
-            -schema-location 'https://artifacts.home.romaine.life/general/githubusercontent/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+          kustomize build k8s > "$RUNNER_TEMP/manifests.yaml"
+          kubeconform -strict -summary -schema-location 'https://artifacts.home.romaine.life/general/githubusercontent/yannh/kubernetes-json-schema/master/{{.NormalizedKubernetesVersion}}-standalone{{.StrictSuffix}}/{{.ResourceKind}}{{.KindSuffix}}.json' \
+            -schema-location 'https://artifacts.home.romaine.life/general/githubusercontent/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+            "$RUNNER_TEMP/manifests.yaml"
+      - uses: romaine-life/pipeline-templates/actions/check-image-digests@main
+        with:
+          manifests: ${{ runner.temp }}/manifests.yaml
