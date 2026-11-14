@@ -47,11 +47,11 @@ jobs:
         shell: pwsh
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: false
-      - uses: actions/setup-node@v4
+      - uses: romaine-life/pipeline-templates/actions/setup-node@main
         with:
           node-version: 20
       - run: go vet ./...
