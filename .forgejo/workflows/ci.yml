@@ -47,7 +47,7 @@ jobs:
         shell: pwsh
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v6
+      - uses: romaine-life/pipeline-templates/actions/setup-go@main
         with:
           go-version-file: go.mod
           cache: false
