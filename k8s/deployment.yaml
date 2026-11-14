@@ -30,7 +30,7 @@ spec:
       containers:
         - name: fzt-frontend
           # The release is built and tested by .forgejo/workflows/ci.yml; no mutable tag.
-          image: forgejo.romaine.life/romaine-life/fzt-frontend:v0.1.67@sha256:666778ecab496ab2acff051aa420963ddc848872ea999754c443f1fc9cb13952
+          image: forgejo.romaine.life/romaine-life/fzt-frontend:v0.1.69@sha256:a40854af7556d004ba50613665935abdb4f385079f72b3b5f54418466e0409a2
           env:
             - name: PORT
               value: "3000"
