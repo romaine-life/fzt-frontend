@@ -1,8 +1,8 @@
 # fzt-frontend
 
 Canonical menu and bookmark tree API, home-only at
-https://fzt-frontend.home.romaine.life. Work: [FORGEJO-6](https://openproject.romaine.life/wp/FORGEJO-6),
-service project [FZTF](https://openproject.romaine.life/projects/FZTF).
+https://fzt-frontend.home.romaine.life. Work: [FORGEJO-6](https://openproject.home.romaine.life/wp/FORGEJO-6),
+service project [FZTF](https://openproject.home.romaine.life/projects/FZTF).
 The Go module keeps its github.com/romaine-life/fzt-frontend import path;
 Forgejo is the repository and release authority, and GitHub is a push mirror.
 
