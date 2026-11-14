@@ -74,17 +74,28 @@ jobs:
       - name: Check release inputs
         id: inputs
         # Against the last release, not the previous push, so a release that failed is
-        # made by the next push to main.
+        # made by the next push to main. Read from Forgejo, not the newest tag: a tag is
+        # reserved before the image is pushed, so a run that failed after that leaves one.
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eu
-          last=$(git tag -l 'v0.1.*' --sort=-v:refname | head -1)
-          if [ -z "$last" ]; then
+          code=$(printf 'header = "Authorization: token %s"\n' "$TOKEN" | curl -sS -K - -o "$RUNNER_TEMP/latest.json" -w '%{http_code}' "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/releases/latest")
+          case "$code" in
+            200) last=$(jq -er .tag_name "$RUNNER_TEMP/latest.json") ;;
+            404) last= ;;
+            *) echo "::error::reading the last release returned HTTP $code"; exit 1 ;;
+          esac
+          if [ -z "$last" ] || ! git diff --quiet "$last" HEAD -- Dockerfile .dockerignore backend '*.go' go.mod go.sum; then
             echo 'changed=true' >> "$GITHUB_OUTPUT"
-          elif git diff --quiet "$last" HEAD -- Dockerfile .dockerignore backend '*.go' go.mod go.sum; then
-            echo 'changed=false' >> "$GITHUB_OUTPUT"
           else
-            echo 'changed=true' >> "$GITHUB_OUTPUT"
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
           fi
+      - id: version
+        uses: romaine-life/pipeline-templates/actions/release-version@main
+        with:
+          prefix: v0.1
+          publish: ${{ github.event_name == 'push' && steps.inputs.outputs.changed == 'true' }}
       - name: Build application image
         run: docker build --network host -t "fzt-frontend:check-$GITHUB_SHA" .
       - name: Smoke-test the real image and authentication gate
@@ -108,12 +119,11 @@ jobs:
           if [ "$ready" != true ]; then docker logs "$name"; exit 1; fi
           docker exec "$name" node -e 'Promise.all([fetch("http://127.0.0.1:33099/fzt/tree/fixture"),fetch("http://127.0.0.1:33099/fzt/tree/fixture",{headers:{Authorization:"Bearer invalid"}})]).then(rs=>process.exit(rs.every(r=>r.status===401)?0:1))'
       - name: Publish image and module release on Forgejo
-        if: github.event_name == 'push' && steps.inputs.outputs.changed == 'true'
+        if: steps.version.outputs.tag != ''
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ steps.version.outputs.tag }}
         run: |
-          last=$(git tag -l 'v0.1.*' --sort=-v:refname | head -1)
-          tag="v0.1.$(( ${last#v0.1.} + 1 ))"
           image="forgejo.romaine.life/romaine-life/fzt-frontend:$tag"
           export DOCKER_CONFIG="$RUNNER_TEMP/fzt-registry"
           trap 'rm -rf "$DOCKER_CONFIG"' EXIT
@@ -148,7 +158,7 @@ jobs:
       # The home cluster runs what k8s/ pins, so a release reaches it through this PR,
       # merged once its checks pass (auth's pattern, romaine-life/auth).
       - name: Propose the image pin
-        if: github.event_name == 'push' && steps.inputs.outputs.changed == 'true'
+        if: steps.version.outputs.tag != ''
         env:
           TOKEN: ${{ secrets.PIPELINE_DISPATCH_TOKEN }}
         run: |
