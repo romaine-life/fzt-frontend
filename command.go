@@ -9,13 +9,33 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 
 	"github.com/romaine-life/fzt/core"
 )
 
-// EngineVersion is the fzt engine version this build was compiled against.
-// Set via ldflags: -X github.com/romaine-life/fzt-frontend.EngineVersion=v0.2.39
-var EngineVersion = "dev"
+// EngineVersion is the fzt engine version this build was compiled against, as the Go
+// toolchain records it in the binary; "dev" where it records none.
+var EngineVersion = engineVersion()
+
+func engineVersion() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "dev"
+	}
+	for _, m := range info.Deps {
+		if m.Path != "github.com/romaine-life/fzt" {
+			continue
+		}
+		if m.Replace != nil {
+			m = m.Replace
+		}
+		if m.Version != "" && m.Version != "(devel)" {
+			return m.Version
+		}
+	}
+	return "dev"
+}
 
 // cmdAction creates an *ItemAction with type "command" for command palette items.
 func cmdAction(target string) *core.ItemAction {
