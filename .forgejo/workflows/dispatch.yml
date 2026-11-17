@@ -1,9 +1,0 @@
-name: Dependency Update
-on:
-  workflow_dispatch:
-jobs:
-  update:
-    uses: romaine-life/pipeline-templates/.forgejo/workflows/go-dependency-update-template.yml@main
-    secrets: inherit
-    with:
-      modules: github.com/romaine-life/fzt
