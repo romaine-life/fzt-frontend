@@ -3,8 +3,8 @@ module github.com/romaine-life/fzt-frontend
 go 1.26.1
 
 require (
-	github.com/romaine-life/auth v0.1.20
-	github.com/romaine-life/fzt v0.2.119
+	github.com/romaine-life/auth v0.1.60
+	github.com/romaine-life/fzt v0.2.120
 	gopkg.in/yaml.v3 v3.0.1
 )
 
