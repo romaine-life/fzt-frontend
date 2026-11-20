@@ -41,9 +41,10 @@ before stopping the old one. The home name, fzt-frontend.home.romaine.life, poin
 the cluster in the NAS's DNS Server, and the cluster's gateway serves it with the
 `*.home.romaine.life` certificate. No public DNS record or router forward is needed.
 
-The deploy key and the registry's read-only token are OpenBao's
-`secret/services/fzt-frontend` (`store-deploy-key`, `registry-read-token`), which
-External Secrets copies into the namespace. To replace the deploy key, write the new one
+The deploy key is OpenBao's `secret/services/fzt-frontend` (`store-deploy-key`), which
+External Secrets copies into the namespace. The image pulls with an hour's token OpenBao
+signs, which External Secrets refreshes into `forgejo-registry` (nelsong6/home-cluster's
+ClusterGenerator `forgejo-image-pull`; no registry token is stored, BAO-15). To replace the deploy key, write the new one
 there as the NAS (`sudo /volume1/docker/homesvc/homesvc import-secrets fzt-frontend`, a
 JSON object on stdin, never a credential in an argument); the pod picks it up on its
 next start. The clone and SSH working files live in /tmp and are rebuilt on every start.
