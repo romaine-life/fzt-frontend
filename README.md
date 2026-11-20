@@ -55,11 +55,10 @@ The route's annotations are its down alert: the NAS's `homesvc health` checks
 /health each minute and alerts through ntfy. Its logs are in the pile:
 `log-search <words> --pc cluster --app fzt-frontend`.
 
-The main publishing job exchanges its Forgejo OIDC identity at OpenBao auth/forgejo
-for read access only to secret/services/fzt-frontend-build (registry-token).
-The token has write:package only. PRs and other repositories/refs/workflows cannot
-read it, and the job cannot read the SSH key. No registry token is held in Key Vault
-or a Forgejo Actions secret.
+The main publishing job signs in to Forgejo's registry with its own short-lived job token,
+which nelson's Forgejo integration ci-image-publish takes for the suites' release workflow on
+main (write:package; nelsong6/forgejo README, Package sign-in). No registry token is stored
+anywhere (BAO-15).
 
 ## Development
 
