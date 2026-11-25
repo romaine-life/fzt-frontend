@@ -145,6 +145,13 @@ func MenuTreeID(sub string) string {
 // file as YAML. The tree id comes from the token's owner grant.
 // Returns (item count, version number, error).
 func SyncMenu(configDir string) (int, int, error) {
+	if token, treeID, ok := directStore(configDir); ok {
+		doc, _, err := fetchDirect(token, treeID)
+		if err != nil {
+			return 0, 0, err
+		}
+		return writeMenuCache(configDir, doc.Tree, doc.Version)
+	}
 	token, err := ReadAuthToken()
 	if err != nil {
 		return 0, 0, err
@@ -158,7 +165,11 @@ func SyncMenu(configDir string) (int, int, error) {
 	if err != nil {
 		return 0, 0, fmt.Errorf("API error: %w", err)
 	}
+	return writeMenuCache(configDir, menu, version)
+}
 
+// writeMenuCache writes the menu and its version to the local cache.
+func writeMenuCache(configDir string, menu []interface{}, version int) (int, int, error) {
 	data, err := MenuToYAML(menu)
 	if err != nil {
 		return 0, 0, err
@@ -178,18 +189,25 @@ func SyncMenu(configDir string) (int, int, error) {
 // SaveMenu PUTs the caller's menu tree and updates the local cache. The tree
 // id comes from the token's owner grant. Returns the new version.
 func SaveMenu(configDir string, menu []interface{}, baseVersion int) (int, error) {
-	token, err := ReadAuthToken()
-	if err != nil {
-		return 0, err
-	}
-	sub, err := SubFromToken(token)
-	if err != nil {
-		return 0, err
-	}
-
-	version, err := SaveTree(token, MenuTreeID(sub), menu, baseVersion)
-	if err != nil {
-		return 0, err
+	var version int
+	if token, treeID, ok := directStore(configDir); ok {
+		v, err := saveDirect(token, treeID, menu, baseVersion)
+		if err != nil {
+			return 0, err
+		}
+		version = v
+	} else {
+		token, err := ReadAuthToken()
+		if err != nil {
+			return 0, err
+		}
+		sub, err := SubFromToken(token)
+		if err != nil {
+			return 0, err
+		}
+		if version, err = SaveTree(token, MenuTreeID(sub), menu, baseVersion); err != nil {
+			return 0, err
+		}
 	}
 
 	data, err := MenuToYAML(menu)
@@ -246,18 +264,25 @@ func yamlEntries(items []interface{}) []core.YAMLEntry {
 // cache. A failure is returned, not read as "not stale", so the menu can say it
 // couldn't check: an *AuthError when signing in failed.
 func CheckMenuStale(configDir string) (bool, error) {
-	token, err := ReadAuthToken()
-	if err != nil {
-		return false, err
-	}
-	sub, err := SubFromToken(token)
-	if err != nil {
-		return false, err
-	}
-
-	_, _, updatedAt, err := FetchTree(token, MenuTreeID(sub))
-	if err != nil {
-		return false, fmt.Errorf("checking the menu: %w", err)
+	var updatedAt string
+	if token, treeID, ok := directStore(configDir); ok {
+		doc, _, err := fetchDirect(token, treeID)
+		if err != nil {
+			return false, fmt.Errorf("checking the menu: %w", err)
+		}
+		updatedAt = doc.UpdatedAt
+	} else {
+		token, err := ReadAuthToken()
+		if err != nil {
+			return false, err
+		}
+		sub, err := SubFromToken(token)
+		if err != nil {
+			return false, err
+		}
+		if _, _, updatedAt, err = FetchTree(token, MenuTreeID(sub)); err != nil {
+			return false, fmt.Errorf("checking the menu: %w", err)
+		}
 	}
 	if updatedAt == "" {
 		return false, nil // never saved
