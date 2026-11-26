@@ -11,9 +11,10 @@ RUN addgroup -g 1001 -S nodejs && \
     chown nodejs:nodejs /app
 USER nodejs
 
-COPY --chown=nodejs:nodejs backend/package*.json backend/
+# @romaine-life/logline comes from Forgejo's npm registry (backend/.npmrc), read with CI's sign-in.
+COPY --chown=nodejs:nodejs backend/package*.json backend/.npmrc backend/
 ARG NPM_CONFIG_REGISTRY=https://artifacts.home.romaine.life/npm/npm/
-RUN cd backend && npm ci --omit=dev
+RUN --mount=type=secret,id=FORGEJO_PACKAGES_TOKEN,env=FORGEJO_PACKAGES_TOKEN cd backend && npm ci --omit=dev
 COPY --chown=nodejs:nodejs backend/ backend/
 
 EXPOSE 3000

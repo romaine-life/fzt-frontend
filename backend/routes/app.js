@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { ConflictError, InvalidTreeError } from '../store.js';
+import { errorText, outside, log } from '../log.js';
 
 /**
  * Creates the unified fzt-frontend tree routes.
@@ -121,7 +122,7 @@ export function createFztFrontendRoutes({ requireAuth, store }) {
       if (error instanceof InvalidTreeError) {
         return res.status(400).json({ error: error.message });
       }
-      console.error('Error fetching tree:', error);
+      log.error('tree read failed', { id: outside(req.params.id), error: errorText(error) });
       res.status(500).json({ error: 'Failed to fetch tree', message: error.message });
     }
   });
@@ -156,7 +157,7 @@ export function createFztFrontendRoutes({ requireAuth, store }) {
       if (error instanceof InvalidTreeError) {
         return res.status(422).json({ error: 'Tree rejected', message: error.message });
       }
-      console.error('Error saving tree:', error);
+      log.error('tree save failed', { id: outside(req.params.id), error: errorText(error) });
       res.status(500).json({ error: 'Failed to save tree', message: error.message });
     }
   });

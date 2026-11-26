@@ -4,7 +4,6 @@
 import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
-import morgan from 'morgan';
 import cors from 'cors';
 import { execFile } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -13,6 +12,7 @@ import { promisify } from 'node:util';
 import { createFztFrontendRoutes } from './routes/index.js';
 import { createRequireAuth } from './auth.js';
 import { Store } from './store.js';
+import { errorText, log, requestLog } from './log.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -21,9 +21,8 @@ let serverReady = false;
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
-// Which kind of token each request used, so the machines' move to home tokens reads from the log.
-morgan.token('token-kind', req => req.caller || '-');
-app.use(morgan(`${morgan.combined} caller=":token-kind"`));
+// One line per request, with which kind of token it used (log.js).
+app.use(requestLog());
 
 app.use((req, res, next) => {
   if (serverReady || req.path === '/health') return next();
@@ -52,7 +51,7 @@ async function start() {
   app.use('/fzt', createFztFrontendRoutes({ requireAuth, store }));
 
   serverReady = true;
-  console.log(`[fzt-frontend] ready on port ${PORT}`);
+  log.info('fzt-frontend ready', { port: PORT });
 }
 
 // The image's self-test (`--self-test`, run by the cluster suite's image check on a
@@ -85,7 +84,7 @@ async function selfTest() {
       server.closeAllConnections();
       server.close();
     }
-    console.log('[fzt-frontend] self-test passed');
+    log.info('fzt-frontend self-test passed');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -94,13 +93,13 @@ async function selfTest() {
 if (process.argv.includes('--self-test')) {
   // Its result is the exit code; nothing is left open, so the process then ends.
   selfTest().catch((err) => {
-    console.error('[fzt-frontend] self-test failed:', err);
+    log.error('fzt-frontend self-test failed', { error: errorText(err) });
     process.exitCode = 1;
   });
 } else {
   app.listen(PORT, () => {
     start().catch((err) => {
-      console.error('[fzt-frontend] fatal startup error:', err);
+      log.error('fzt-frontend startup failed', { error: errorText(err) });
       process.exit(1);
     });
   });
