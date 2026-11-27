@@ -30,8 +30,8 @@ publishes it under forgejo.romaine.life/romaine-life/fzt-frontend with the next
 v0.1.N tag, and cuts the module release. `k8s/deployment.yaml` pins the tested
 release by tag and digest. The same run opens a PR moving the pin to the new tag, with the
 digest the registry holds for it, and has Forgejo merge it
-once its checks pass, so a release deploys itself (auth's pattern); it pushes with the
-`PIPELINE_DISPATCH_TOKEN` org secret. Deployment and documentation changes run
+once its checks pass, so a release deploys itself (auth's pattern); it pushes with a
+short-lived token from the job's identity (pipeline-templates actions/forgejo-token). Deployment and documentation changes run
 the checks without publishing another application release. No image is published to
 GitHub, ghcr or Azure ACR.
 
