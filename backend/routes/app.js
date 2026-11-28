@@ -15,10 +15,14 @@ import { errorText, outside, log } from '../log.js';
  * bumps `version` by 1. A menu save must keep the store's invariants:
  * every entry runs a command the store has, and every command keeps an entry.
  *
- * Refs within a tree use the shape `{ ref: "<treeId>" }`. The GET
- * handler recursively expands them (cycle-guarded, depth-limited),
- * tagging resolved nodes with `_ref`/`_refVersion` so PUT can strip
- * them back to pointer form. Cross-tree writes are NOT performed — if
+ * Refs within a tree use the shape `{ ref: "<treeId>" }`, optionally
+ * labelled with their own `name`, `description` and `tags`, which win
+ * over the referenced tree's (the at menu's `links` folder is the
+ * bookmarks tree, labelled; AT-9). The GET handler recursively expands
+ * them (cycle-guarded, depth-limited), tagging resolved nodes with
+ * `_ref`/`_refVersion`/`_refLabel` so PUT can strip them back to
+ * pointer form, label kept. A referenced tree's empty folders (devctl's
+ * dev-environments with nothing running) are left out of the expansion. Cross-tree writes are NOT performed — if
  * a caller wants to edit a referenced tree, they PUT that tree's id
  * directly (see fzt-frontend#4).
  *
@@ -31,6 +35,16 @@ export function createFztFrontendRoutes({ requireAuth, store }) {
   const router = Router();
 
   const MAX_REF_DEPTH = 10;
+  // The keys a ref may carry besides `ref`: its own label in the tree that holds it.
+  const REF_LABEL_KEYS = ['name', 'description', 'tags'];
+
+  // A folder with nothing in it and nothing to run, dropped from an expansion: a
+  // menu reads a childless leaf as a command named after it.
+  function withoutEmptyFolders(items) {
+    return items.filter(item => !(item && typeof item === 'object'
+      && Array.isArray(item.children) && item.children.length === 0
+      && !item.action && !item.url && item.ref === undefined && item._ref === undefined));
+  }
 
   function canWriteTree(actor, id) {
     if (actor?.purpose !== 'machine') return true;
@@ -47,7 +61,8 @@ export function createFztFrontendRoutes({ requireAuth, store }) {
         continue;
       }
       const keysWithoutError = Object.keys(item).filter(k => k !== '_refError');
-      if (typeof item.ref === 'string' && keysWithoutError.length === 1) {
+      if (typeof item.ref === 'string' && keysWithoutError.every(k => k === 'ref' || REF_LABEL_KEYS.includes(k))) {
+        const labelKeys = keysWithoutError.filter(k => k !== 'ref');
         if (visited.has(item.ref) || visited.size >= MAX_REF_DEPTH) {
           out.push({ ...item, _refError: true });
           continue;
@@ -69,13 +84,17 @@ export function createFztFrontendRoutes({ requireAuth, store }) {
         };
         if (Array.isArray(body)) {
           const nextVisited = new Set(visited); nextVisited.add(item.ref);
-          resolvedNode.children = await resolveRefs(body, nextVisited);
+          resolvedNode.children = withoutEmptyFolders(await resolveRefs(body, nextVisited));
         } else if (body && typeof body === 'object') {
           Object.assign(resolvedNode, body);
           if (Array.isArray(body.children)) {
             const nextVisited = new Set(visited); nextVisited.add(item.ref);
-            resolvedNode.children = await resolveRefs(body.children, nextVisited);
+            resolvedNode.children = withoutEmptyFolders(await resolveRefs(body.children, nextVisited));
           }
+        }
+        if (labelKeys.length > 0) {
+          for (const k of labelKeys) resolvedNode[k] = item[k];
+          resolvedNode._refLabel = labelKeys;
         }
         out.push(resolvedNode);
       } else if (Array.isArray(item.children) && item.children.length > 0) {
@@ -92,7 +111,13 @@ export function createFztFrontendRoutes({ requireAuth, store }) {
     return items.map(item => {
       if (!item || typeof item !== 'object') return item;
       if (typeof item._ref === 'string') {
-        return { ref: item._ref };
+        const pointer = { ref: item._ref };
+        if (Array.isArray(item._refLabel)) {
+          for (const k of item._refLabel) {
+            if (REF_LABEL_KEYS.includes(k) && item[k] !== undefined) pointer[k] = item[k];
+          }
+        }
+        return pointer;
       }
       if (Array.isArray(item.children) && item.children.length > 0) {
         return { ...item, children: stripRefs(item.children) };

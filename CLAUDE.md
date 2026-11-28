@@ -110,11 +110,17 @@ every version, in the store at `archive/cosmos-export.jsonl.gz`.
 
 ## Tree refs
 
-Anywhere inside a tree, an item shaped exactly `{ ref: "<otherTreeId>" }`
-expands inline on GET — the resolver walks the referenced tree's body
-in place, tagging the resolved node with `_ref` and `_refVersion` so a
-subsequent PUT can collapse it back to pointer form. Cycle-guarded
-(visited set) and depth-limited (`MAX_REF_DEPTH=10`).
+Anywhere inside a tree, an item shaped `{ ref: "<otherTreeId>" }`, with
+at most its own `name`, `description` and `tags` beside `ref`, expands
+inline on GET — the resolver walks the referenced tree's body in place,
+the ref's own label winning over the referenced tree's (the at menu's
+`links` folder is the bookmarks tree under the label `links`; AT-9). It
+tags the resolved node with `_ref`, `_refVersion` and, for a labelled
+ref, `_refLabel` so a subsequent PUT can collapse it back to the same
+labelled pointer. A referenced tree's empty folders (devctl's
+`dev-environments` with nothing running) are left out of the expansion,
+since a menu reads a childless leaf as a command. Cycle-guarded (visited
+set) and depth-limited (`MAX_REF_DEPTH=10`).
 
 Cross-tree writes are **not** performed: PUT only writes the target
 tree id, and `_ref` markers in the body are stripped back to
